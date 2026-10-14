@@ -15,6 +15,8 @@ stops listening.
 - Runs on a Linux laptop in Chrome, served by the Vite dev server at
   `http://localhost:5173` (a secure context, so `getUserMedia` works
   without HTTPS). The port is fixed with `strictPort: true`.
+- Chrome only. No fallbacks, polyfills or testing for other browsers,
+  and Chrome behaviour may be relied on.
 - Input is a Bluetooth headset microphone in HFP mode: mono, 8 kHz
   (narrowband) or 16 kHz (mSBC wideband). Detection may only rely on
   content below 4 kHz.
