@@ -2,11 +2,42 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Rep Counter</title>
   </head>
   <body>
-    <button id="test" type="button">Test mic</button>
-    <pre id="out"></pre>
+    <main>
+      <header>
+        <label>Mic <select id="mic"></select></label>
+        <span id="cal-status">Not calibrated</span>
+        <button id="recalibrate" type="button">Recalibrate</button>
+      </header>
+
+      <p id="error" role="alert" hidden></p>
+
+      <section id="set">
+        <label>Target reps <input id="target" type="number" min="1" step="1" value="10" /></label>
+        <button id="start" type="button">Start set</button>
+        <p id="status" aria-live="polite">Ready</p>
+        <p id="count"><span id="count-done">0</span> / <span id="count-target">10</span></p>
+        <div id="set-controls" hidden>
+          <button id="minus" type="button">−1</button>
+          <button id="plus" type="button">+1</button>
+          <button id="stop" type="button">Stop</button>
+        </div>
+      </section>
+
+      <details id="tuning" open>
+        <summary>Tuning</summary>
+        <canvas id="meter"></canvas>
+        <ol id="rejections"></ol>
+        <form id="save-set" hidden>
+          <label>Reps you actually did <input id="actual" type="number" min="0" step="1" /></label>
+          <button type="submit">Save set data</button>
+          <span id="save-status"></span>
+        </form>
+      </details>
+    </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

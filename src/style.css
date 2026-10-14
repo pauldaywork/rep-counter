@@ -1,0 +1,145 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f6f6f4;
+  --fg: #1b1b1b;
+  --muted: #666;
+  --panel: #fff;
+  --border: #d8d8d4;
+  --accent: #2563eb;
+  --error-bg: #fde8e8;
+  --error-fg: #9b1c1c;
+  --meter-trace: #2563eb;
+  --meter-on: #16a34a;
+  --meter-off: #ca8a04;
+  --meter-rep: #16a34a;
+  --meter-reject: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141414;
+    --fg: #ececec;
+    --muted: #9a9a9a;
+    --panel: #1e1e1e;
+    --border: #333;
+    --accent: #3b82f6;
+    --error-bg: #3b1515;
+    --error-fg: #fca5a5;
+    --meter-trace: #60a5fa;
+    --meter-on: #4ade80;
+    --meter-off: #facc15;
+    --meter-rep: #4ade80;
+    --meter-reject: #f87171;
+  }
+}
+
+[hidden] {
+  display: none !important;
+}
+
+body {
+  margin: 0;
+  font: 16px/1.5 system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+  display: grid;
+  gap: 16px;
+}
+
+header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 12px;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#error {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--error-bg);
+  color: var(--error-fg);
+}
+
+#set {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+
+#start {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  font-size: 1.25rem;
+  padding: 12px 32px;
+}
+
+#status {
+  margin: 0;
+  font-size: 1.25rem;
+  text-align: center;
+}
+
+#count {
+  margin: 0;
+  font-size: clamp(64px, 18vw, 160px);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+#set-controls {
+  display: flex;
+  gap: 12px;
+}
+
+#meter {
+  display: block;
+  width: 100%;
+  height: 160px;
+  margin-top: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+#rejections {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+#save-set {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
