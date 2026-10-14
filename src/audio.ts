@@ -23,7 +23,8 @@ export async function listMics(): Promise<MediaDeviceInfo[]> {
 /**
  * Opens a mic with the browser's voice processing off and streams feature
  * frames to onFrame. onEnded fires if the mic goes away (e.g. the headset
- * disconnects) before stop() is called.
+ * disconnects) before stop() is called. The caller must still call stop()
+ * after onEnded to release the AudioContext.
  */
 export async function startMic(
   deviceId: string,
@@ -40,39 +41,49 @@ export async function startMic(
     },
   });
   const [track] = stream.getAudioTracks();
-  const context = new AudioContext();
-  try {
-    await context.audioWorklet.addModule(workletUrl);
-  } catch (err) {
-    for (const t of stream.getTracks()) t.stop();
-    await context.close();
-    throw err;
-  }
-  const source = context.createMediaStreamSource(stream);
-  const node = new AudioWorkletNode(context, "features", {
-    numberOfInputs: 1,
-    numberOfOutputs: 0,
-    channelCount: 1,
-    channelCountMode: "explicit",
-  });
-  node.port.onmessage = (event: MessageEvent<Frame>) => onFrame(event.data);
-  source.connect(node);
-  await context.resume();
-
   let stopped = false;
   track.addEventListener("ended", () => {
     if (!stopped) onEnded();
   });
+
+  let context: AudioContext | undefined;
+  let source: MediaStreamAudioSourceNode | undefined;
+  let node: AudioWorkletNode;
+  try {
+    context = new AudioContext();
+    await context.audioWorklet.addModule(workletUrl);
+    source = context.createMediaStreamSource(stream);
+    node = new AudioWorkletNode(context, "features", {
+      numberOfInputs: 1,
+      numberOfOutputs: 0,
+      channelCount: 1,
+      channelCountMode: "explicit",
+    });
+    node.port.onmessage = (event: MessageEvent<Frame>) => onFrame(event.data);
+    source.connect(node);
+    await context.resume();
+  } catch (err) {
+    // The caller never gets a session, so release everything here. The error
+    // reaches the caller, so onEnded must not fire as well.
+    stopped = true;
+    source?.disconnect();
+    for (const t of stream.getTracks()) t.stop();
+    await context?.close().catch(() => {});
+    throw err;
+  }
+  const liveContext = context;
+  const liveSource = source;
+  const liveNode = node;
 
   return {
     label: track.label,
     async stop() {
       if (stopped) return;
       stopped = true;
-      node.port.onmessage = null;
-      source.disconnect();
+      liveNode.port.onmessage = null;
+      liveSource.disconnect();
       for (const t of stream.getTracks()) t.stop();
-      await context.close();
+      await liveContext.close();
     },
   };
 }
