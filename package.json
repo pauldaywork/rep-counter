@@ -1,0 +1,20 @@
+{
+  "name": "rep-counter",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fft.js": "4.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.4"
+  }
+}
