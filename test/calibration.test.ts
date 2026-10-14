@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   deriveCalibration,
+  DIGITAL_SILENCE_DB,
   exhalesComplete,
+  MAX_REBASE_DB,
+  MIN_SPAN_DB,
   noiseFloor,
+  rebasedFloor,
   segmentExhales,
   thresholdsFor,
+  WARMUP_MS,
   type Calibration,
 } from "../src/calibration";
 import type { Frame } from "../src/features";
@@ -17,8 +22,10 @@ const breathB: Segment = { ms: 400, db: -34, flatness: 0.4, highRatio: 0.5 };
 const breathC: Segment = { ms: 400, db: -32, flatness: 0.45, highRatio: 0.7 };
 const threeBreaths = frames(quiet(500), breathA, quiet(600), breathB, quiet(600), breathC, quiet(800));
 
+/** Frames 20 ms apart from t = 20, behind a loud warm-up that noiseFloor must ignore. */
 function dbFrames(...dbs: number[]): Frame[] {
-  return dbs.map((db, i) => ({ t: (i + 1) * 20, db, flatness: 0.5, highRatio: 0.5 }));
+  const warmup = Array.from({ length: WARMUP_MS / 20 }, () => -10);
+  return [...warmup, ...dbs].map((db, i) => ({ t: (i + 1) * 20, db, flatness: 0.5, highRatio: 0.5 }));
 }
 
 function calibrated(): Calibration {
@@ -31,6 +38,39 @@ describe("noiseFloor", () => {
   it("is the median frame level", () => {
     expect(noiseFloor(dbFrames(-70, -60, -80))).toBe(-70);
     expect(noiseFloor(dbFrames(-70, -60, -80, -50))).toBe(-65);
+  });
+
+  it("ignores digital silence", () => {
+    expect(DIGITAL_SILENCE_DB).toBe(-150);
+    expect(noiseFloor(dbFrames(-200, -200, -200, -70, -60, -80))).toBe(-70);
+  });
+
+  it("ignores the first 400 ms of audio", () => {
+    const loudStart = frames({ ms: 400, db: -20 }, quiet(400));
+    expect(noiseFloor(loudStart)).toBe(-70);
+  });
+
+  it("throws when only silence remains", () => {
+    const silent = frames({ ms: 1000, db: -200 });
+    expect(() => noiseFloor(silent)).toThrow(/^The microphone sent only silence\./);
+    expect(() => noiseFloor(frames(quiet(400)))).toThrow(/only silence/);
+  });
+
+  it("throws when given no frames", () => {
+    expect(() => noiseFloor([])).toThrow(/No audio was captured/);
+  });
+});
+
+describe("rebasedFloor", () => {
+  it("passes a measurement near the calibrated floor unchanged", () => {
+    expect(rebasedFloor(calibrated(), -65)).toBe(-65);
+    expect(rebasedFloor(calibrated(), -70 + MAX_REBASE_DB)).toBe(-60);
+  });
+
+  it("clamps to 10 dB either side of the calibrated floor", () => {
+    expect(MAX_REBASE_DB).toBe(10);
+    expect(rebasedFloor(calibrated(), -40)).toBe(-60);
+    expect(rebasedFloor(calibrated(), -200)).toBe(-80);
   });
 });
 
@@ -72,6 +112,16 @@ describe("deriveCalibration", () => {
     const twoBreaths = frames(quiet(500), breathA, quiet(600), breathB, quiet(800));
     const result = deriveCalibration(frames(quiet(3000)), twoBreaths, NOW);
     expect(result).toEqual({ ok: false, reason: expect.stringMatching(/^Heard 2 of 3 breaths/) });
+  });
+
+  it("fails when the breaths are under 15 dB above the background", () => {
+    expect(MIN_SPAN_DB).toBe(15);
+    const faint: Segment = { ms: 400, db: -58, flatness: 0.5, highRatio: 0.6 };
+    const result = deriveCalibration(frames(quiet(3000)), frames(quiet(500), faint, quiet(600), faint, quiet(600), faint, quiet(800)), NOW);
+    expect(result).toEqual({
+      ok: false,
+      reason: "Breaths were only 12 dB above the background; need 15. Breathe out harder, closer to the mic.",
+    });
   });
 
   it("ignores breaths quieter than 10 dB above the background", () => {

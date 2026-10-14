@@ -26,9 +26,24 @@ export const REQUIRED_EXHALES = 3;
 const SEGMENT_OPEN_DB = 10;
 const SEGMENT_CLOSE_DB = 6;
 
+/** Frames below this are digital zeros, not a measurement. */
+export const DIGITAL_SILENCE_DB = -150;
+/** Bluetooth mics often send zeros or glitches just after opening; skip this long. */
+export const WARMUP_MS = 400;
+/** A per-set noise floor may differ from the calibrated one by at most this. */
+export const MAX_REBASE_DB = 10;
+/** Calibration breaths must peak at least this far above the noise floor. */
+export const MIN_SPAN_DB = 15;
+
+/** Median level of the real audio: skips the warm-up and digital silence. */
 export function noiseFloor(frames: Frame[]): number {
   if (frames.length === 0) throw new Error("No audio was captured to measure the background noise.");
-  const sorted = frames.map((f) => f.db).sort((a, b) => a - b);
+  const start = frames[0].t;
+  const usable = frames.filter((f) => f.t - start >= WARMUP_MS && f.db >= DIGITAL_SILENCE_DB);
+  if (usable.length === 0) {
+    throw new Error("The microphone sent only silence. Check the headset is in headset (HFP) mode and try again.");
+  }
+  const sorted = usable.map((f) => f.db).sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
@@ -82,8 +97,15 @@ export function deriveCalibration(quiet: Frame[], exhales: Frame[], now: Date = 
     };
   }
   const loudest = [...found].sort((a, b) => b.peakDb - a.peakDb).slice(0, REQUIRED_EXHALES);
-  // Every segment peaks at least 10 dB above the floor, so span >= 10 dB.
+  // Segments peak at least 10 dB above the floor, but a gate that low leaves
+  // offDb only 3 dB above it, so ask for more.
   const span = Math.min(...loudest.map((s) => s.peakDb)) - noiseFloorDb;
+  if (span < MIN_SPAN_DB) {
+    return {
+      ok: false,
+      reason: `Breaths were only ${span.toFixed(0)} dB above the background; need ${MIN_SPAN_DB}. Breathe out harder, closer to the mic.`,
+    };
+  }
   return {
     ok: true,
     calibration: {
@@ -104,6 +126,13 @@ export function thresholdsFor(calibration: Calibration, noiseFloorDb = calibrati
     minFlatness: calibration.minFlatness,
     minHighRatio: calibration.minHighRatio,
   };
+}
+
+/** The per-set noise floor, kept within MAX_REBASE_DB of the calibrated one. */
+export function rebasedFloor(calibration: Calibration, measuredDb: number): number {
+  const low = calibration.noiseFloorDb - MAX_REBASE_DB;
+  const high = calibration.noiseFloorDb + MAX_REBASE_DB;
+  return Math.min(high, Math.max(low, measuredDb));
 }
 
 function mean(values: number[]): number {

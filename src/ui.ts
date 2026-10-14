@@ -3,9 +3,11 @@ import {
   deriveCalibration,
   exhalesComplete,
   noiseFloor,
+  rebasedFloor,
   REQUIRED_EXHALES,
   segmentExhales,
   thresholdsFor,
+  WARMUP_MS,
   type Calibration,
 } from "./calibration";
 import { playChime } from "./chime";
@@ -18,8 +20,10 @@ import { RepSet } from "./rep-set";
 import { loadStore, saveRecording, saveStore } from "./store";
 import type { StoreFile } from "./store-schema";
 
-const CALIBRATION_QUIET_MS = 3000;
-const SET_QUIET_MS = 2000;
+// Each quiet window also covers WARMUP_MS that noiseFloor discards.
+const CALIBRATION_QUIET_MS = 3000 + WARMUP_MS;
+const SET_QUIET_MS = 2000 + WARMUP_MS;
+const NO_FRAME_TIMEOUT_MS = 3000;
 const EXHALE_TIMEOUT_MS = 10_000;
 const REJECTIONS_SHOWN = 8;
 
@@ -37,7 +41,8 @@ function el<T extends HTMLElement>(id: string): T {
 }
 
 function message(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  if (err instanceof Error) return err.message || err.name;
+  return String(err);
 }
 
 export class App {
@@ -120,7 +125,7 @@ export class App {
     } catch (err) {
       this.frameSink = null;
       this.currentSet = null;
-      await this.closeMic();
+      await this.closeMic().catch(() => {});
       this.ui.setControls.hidden = true;
       this.setStatus("Ready");
       this.showError(message(err));
@@ -151,7 +156,7 @@ export class App {
     this.setStatus("Stay quiet…");
     const quiet = await this.collect(SET_QUIET_MS);
 
-    const thresholds = thresholdsFor(calibration, noiseFloor(quiet));
+    const thresholds = thresholdsFor(calibration, rebasedFloor(calibration, noiseFloor(quiet)));
     const detector = new Detector(thresholds);
     const set = new RepSet(target);
     const recording: FinishedSet = { mic, thresholds, frames: [], detectedCount: 0 };
@@ -209,11 +214,14 @@ export class App {
 
       const result = deriveCalibration(quiet, exhales);
       if (!result.ok) throw new Error(`Calibration failed. ${result.reason}`);
-      this.store = { ...this.store, lastMic: mic, mics: { ...this.store.mics, [mic]: result.calibration } };
+      const previous = this.store;
+      this.store = { ...previous, lastMic: mic, mics: { ...previous.mics, [mic]: result.calibration } };
       this.renderCalibration();
       try {
         await saveStore(this.store);
       } catch (err) {
+        this.store = previous;
+        this.renderCalibration();
         throw new Error(`Calibrated, but couldn't save it: ${message(err)}`);
       }
       return result.calibration;
@@ -254,7 +262,7 @@ export class App {
 
   private loseMic(label: string): void {
     this.frameSink = null;
-    void this.closeMic();
+    void this.closeMic().catch(() => {});
     this.pending?.reject(new Error(`Lost the microphone "${label}". The set was stopped.`));
   }
 
@@ -262,14 +270,34 @@ export class App {
   private collect(ms: number, done?: (frames: Frame[]) => boolean): Promise<Frame[]> {
     return new Promise((resolve, reject) => {
       const frames: Frame[] = [];
-      this.pending = { reject };
+      // Frame times come from the audio clock, so a stalled mic needs a wall-clock guard.
+      let watchdog: ReturnType<typeof setTimeout>;
+      const armWatchdog = () => {
+        clearTimeout(watchdog);
+        watchdog = setTimeout(() => {
+          this.frameSink = null;
+          this.pending = null;
+          reject(new Error("The microphone stopped sending audio."));
+        }, NO_FRAME_TIMEOUT_MS);
+      };
+      armWatchdog();
+      // loseMic rejects through pending, so clear the timer on that path too.
+      this.pending = {
+        reject: (err) => {
+          clearTimeout(watchdog);
+          reject(err);
+        },
+      };
       this.frameSink = (frame) => {
         frames.push(frame);
         this.meter.addFrame(frame);
         if (frame.t - frames[0].t >= ms || done?.(frames)) {
+          clearTimeout(watchdog);
           this.frameSink = null;
           this.pending = null;
           resolve(frames);
+        } else {
+          armWatchdog();
         }
       };
     });

@@ -93,7 +93,13 @@ Pure functions that turn calibration recordings into thresholds.
 
 Flow, run once per microphone:
 
-1. **Quiet** — 3 s of silence. `noiseFloorDb` = median frame dB.
+1. **Quiet** — 3 s of silence, captured after a 400 ms warm-up
+   (`WARMUP_MS`), so 3.4 s of audio is recorded. `noiseFloorDb` =
+   median frame dB, ignoring the warm-up frames and any frame below
+   −150 dB (`DIGITAL_SILENCE_DB`): Bluetooth headsets often send digital
+   zeros just after the mic opens. If nothing else remains, calibration
+   fails with "The microphone sent only silence" and a hint to check
+   HFP mode.
 2. **Exhales** — the user breathes out hard 3 times when prompted.
    Exhales are segmented with a provisional gate that opens at
    `noiseFloorDb + 10 dB` and closes below `noiseFloorDb + 6 dB`.
@@ -104,8 +110,11 @@ Flow, run once per microphone:
 3. **Derive:**
    - `span = min(exhale peak dB) − noiseFloorDb`
    - if fewer than 3 exhales were found → fail and ask the user to
-     retry. Every segment opens at `noiseFloorDb + 10 dB`, so
-     `span ≥ 10 dB` holds by construction and needs no separate check.
+     retry.
+   - if `span < 15 dB` (`MIN_SPAN_DB`) → fail and ask the user to
+     breathe out harder or closer to the mic. A smaller span leaves
+     `offDb` only about 3 dB above the floor, where ordinary noise
+     keeps the gate open.
    - `onDb = noiseFloorDb + 0.5 × span`
    - `offDb = noiseFloorDb + 0.3 × span`
    - `minFlatness = 0.7 × min(exhale mean flatness)`
@@ -114,9 +123,12 @@ Flow, run once per microphone:
 Stored thresholds are relative to the noise floor (`onOffsetDb`,
 `offOffsetDb`) so they can be re-based.
 
-**Per-set re-base:** each set starts with a 2 s quiet check. The new
-noise floor is used for that set only (it is not saved), and
-`onDb`/`offDb` are recomputed from the stored offsets.
+**Per-set re-base:** each set starts with a 2 s quiet check (2.4 s of
+audio, after the same 400 ms warm-up). The new noise floor is clamped
+to within ±10 dB (`MAX_REBASE_DB`) of the calibrated one, so starting
+while still panting cannot lift the thresholds far. It is used for that
+set only (it is not saved), and `onDb`/`offDb` are recomputed from the
+stored offsets.
 
 Inhales are rejected mainly because they are quieter than `onDb`. The
 600 ms gap rejects any that get through. Inhaling through the nose
@@ -134,7 +146,7 @@ hook) adds:
 
 - `GET /api/calibration` → the file contents, or `{"mics":{}}` if it
   does not exist.
-- `PUT /api/calibration` → validates the JSON body and writes it to a
+- `PUT /api/calibration` → requires a JSON content type, validates the body and writes it to a
   temporary file, then renames it over `data/calibration.json` so a
   failed write cannot corrupt it.
 - `POST /api/fixtures` → writes a set recording to
@@ -174,8 +186,9 @@ One page:
   - The dropdown refreshes on the `navigator.mediaDevices`
     `devicechange` event, so a headset that connects or switches to
     headset (HFP) mode appears without a page reload.
-  - When the list refreshes, the previous selection is kept by label if
-    that mic is still present. Otherwise `lastMic` is used.
+  - When the list refreshes, the last mic the user chose (`lastMic`) is
+    selected whenever it is present; otherwise the current selection is
+    kept, else the first mic.
   - If the active mic disappears during a set, or its track ends, the
     set stops and an error names the lost mic.
 - **Set controls:** target reps input, **Start set**, large `n / target`
@@ -224,11 +237,16 @@ One page:
   - correct thresholds from a known recording
   - retry when fewer than 3 exhales are found (including breaths too
     quiet to reach `noiseFloorDb + 10 dB`)
+  - retry when the breaths are under 15 dB above the noise floor
+  - the noise floor ignores the warm-up and digital silence, and fails
+    when only silence remains
+  - the per-set floor is clamped to ±10 dB of the calibrated one
   - re-basing moves `onDb`/`offDb` by the noise-floor delta
 - **Fixture regression:** each saved `test/fixtures/*.json` is replayed
   through the detector, and the test asserts that the detected count
   equals the recorded actual count.
-- **Store plugin:** a read/write round trip against a temp directory.
+- **Store plugin:** a read/write round trip against a temp directory, and
+  a 400 for a body not sent as JSON.
 
 ## Out of scope
 

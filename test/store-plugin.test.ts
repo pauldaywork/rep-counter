@@ -90,6 +90,16 @@ describe("/api/fixtures", () => {
     expect(JSON.parse(await readFile(path.join(root, saved), "utf8"))).toEqual(recording);
   });
 
+  it("rejects a body that is not sent as JSON", async () => {
+    const res = await fetch(`${base}/api/fixtures`, {
+      method: "POST",
+      headers: { "content-type": "text/plain" },
+      body: JSON.stringify(recording),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe("Expected a JSON request body.");
+  });
+
   it("rejects an invalid recording", async () => {
     expect((await post("/api/fixtures", { ...recording, actualCount: -1 })).status).toBe(400);
   });

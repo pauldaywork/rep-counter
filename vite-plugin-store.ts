@@ -66,6 +66,9 @@ async function readStore(file: string): Promise<StoreFile> {
 }
 
 async function readJson(req: IncomingMessage): Promise<unknown> {
+  if (!req.headers["content-type"]?.startsWith("application/json")) {
+    throw new BadRequest("Expected a JSON request body.");
+  }
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
