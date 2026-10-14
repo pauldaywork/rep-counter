@@ -1,6 +1,8 @@
 import { defineConfig } from "vitest/config";
+import { storePlugin } from "./vite-plugin-store";
 
 export default defineConfig({
+  plugins: [storePlugin()],
   server: { port: 5173, strictPort: true },
   // fft.js is CommonJS and only imported from the AudioWorklet, which
   // Vite's dependency scan does not see. Pre-bundle it up front so the
