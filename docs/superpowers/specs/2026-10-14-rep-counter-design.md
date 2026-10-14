@@ -165,6 +165,13 @@ One page:
 - **Header:** mic dropdown (labels from `enumerateDevices` after mic
   permission), **Recalibrate** button, and a "Calibrated ✓ /
   Not calibrated" status for the selected mic.
+  - The dropdown refreshes on the `navigator.mediaDevices`
+    `devicechange` event, so a headset that connects or switches to
+    headset (HFP) mode appears without a page reload.
+  - When the list refreshes, the previous selection is kept by label if
+    that mic is still present. Otherwise `lastMic` is used.
+  - If the active mic disappears during a set, or its track ends, the
+    set stops and an error names the lost mic.
 - **Set controls:** target reps input, **Start set**, large `n / target`
   counter, **+1 / −1** correction buttons and **Stop** during a set.
   Starting a set on an uncalibrated mic runs calibration first.
