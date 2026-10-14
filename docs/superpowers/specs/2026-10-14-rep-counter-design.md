@@ -103,8 +103,9 @@ Flow, run once per microphone:
    exhale ends, or after 10 s.
 3. **Derive:**
    - `span = min(exhale peak dB) − noiseFloorDb`
-   - if `span < 10 dB` or fewer than 3 exhales were found → fail and
-     ask the user to retry
+   - if fewer than 3 exhales were found → fail and ask the user to
+     retry. Every segment opens at `noiseFloorDb + 10 dB`, so
+     `span ≥ 10 dB` holds by construction and needs no separate check.
    - `onDb = noiseFloorDb + 0.5 × span`
    - `offDb = noiseFloorDb + 0.3 × span`
    - `minFlatness = 0.7 × min(exhale mean flatness)`
@@ -221,8 +222,8 @@ One page:
   - a 2 s sustained noise is rejected as too long
 - **`calibration.ts`:**
   - correct thresholds from a known recording
-  - retry when the span is under 10 dB or fewer than 3 exhales are
-    found
+  - retry when fewer than 3 exhales are found (including breaths too
+    quiet to reach `noiseFloorDb + 10 dB`)
   - re-basing moves `onDb`/`offDb` by the noise-floor delta
 - **Fixture regression:** each saved `test/fixtures/*.json` is replayed
   through the detector, and the test asserts that the detected count
