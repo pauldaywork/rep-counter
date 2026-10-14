@@ -47,7 +47,7 @@ stops listening.
 
    ```ts
    interface Frame {
-     t: number;          // ms, from AudioContext currentTime
+     t: number;          // ms since this mic session started (sample count)
      db: number;         // RMS level in dBFS
      flatness: number;   // spectral flatness 0..1 (1 = white noise)
      highRatio: number;  // energy above 1 kHz / total energy, 0..1
@@ -95,9 +95,12 @@ Flow, run once per microphone:
 
 1. **Quiet** — 3 s of silence. `noiseFloorDb` = median frame dB.
 2. **Exhales** — the user breathes out hard 3 times when prompted.
-   Each exhale is segmented with a provisional threshold of
-   `noiseFloorDb + 10 dB`. For each, record its peak dB, mean
-   flatness and mean highRatio.
+   Exhales are segmented with a provisional gate that opens at
+   `noiseFloorDb + 10 dB` and closes below `noiseFloorDb + 6 dB`.
+   Segments shorter than 150 ms are dropped, and if more than 3
+   remain, the 3 loudest are kept. For each, record its peak dB, mean
+   flatness and mean highRatio. The phase ends 600 ms after the third
+   exhale ends, or after 10 s.
 3. **Derive:**
    - `span = min(exhale peak dB) − noiseFloorDb`
    - if `span < 10 dB` or fewer than 3 exhales were found → fail and
@@ -111,8 +114,8 @@ Stored thresholds are relative to the noise floor (`onOffsetDb`,
 `offOffsetDb`) so they can be re-based.
 
 **Per-set re-base:** each set starts with a 2 s quiet check. The new
-noise floor replaces the stored one, and `onDb`/`offDb` are recomputed
-from the stored offsets.
+noise floor is used for that set only (it is not saved), and
+`onDb`/`offDb` are recomputed from the stored offsets.
 
 Inhales are rejected mainly because they are quieter than `onDb`. The
 600 ms gap rejects any that get through. Inhaling through the nose
@@ -128,8 +131,8 @@ backup.
 A Vite plugin (`vite-plugin-store.ts`, using the `configureServer`
 hook) adds:
 
-- `GET /api/calibration` → the file contents, or `{}` if it does not
-  exist.
+- `GET /api/calibration` → the file contents, or `{"mics":{}}` if it
+  does not exist.
 - `PUT /api/calibration` → validates the JSON body and writes it to a
   temporary file, then renames it over `data/calibration.json` so a
   failed write cannot corrupt it.
@@ -205,8 +208,9 @@ One page:
 
 ## Testing
 
-- **`features.ts`:** a pure sine has low flatness; white noise has
-  flatness near 1; a 200 Hz hum has a low highRatio.
+- **`features.ts`:** a pure sine has flatness below 0.01; white noise
+  has flatness above 0.4 (a single-frame periodogram of white noise
+  scores about 0.56, not 1); a 200 Hz hum has highRatio below 0.01.
 - **`detector.ts`** (synthetic frame sequences):
   - a clean exhale counts
   - a clank (80 ms) is rejected as too short
