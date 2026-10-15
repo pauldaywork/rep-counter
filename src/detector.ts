@@ -16,7 +16,7 @@ export interface DetectorTiming {
   minGapMs: number;
 }
 
-export const DEFAULT_TIMING: DetectorTiming = { minDurationMs: 150, maxDurationMs: 1500, minGapMs: 600 };
+export const DEFAULT_TIMING: DetectorTiming = { minDurationMs: 150, maxDurationMs: 2000, minGapMs: 600 };
 
 export type DetectorEvent =
   | { kind: "rep"; t: number; durationMs: number }

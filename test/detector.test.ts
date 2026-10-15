@@ -51,7 +51,7 @@ describe("Detector", () => {
   });
 
   it("rejects sustained noise as too long, then counts the next exhale", () => {
-    const events = run(frames(quiet(500), exhale(2000), quiet(800), exhale(), quiet(500)));
+    const events = run(frames(quiet(500), exhale(3000), quiet(800), exhale(), quiet(500)));
     expect(events.map((e) => e.kind)).toEqual(["rejected", "rep"]);
     expect(events[0]).toMatchObject({ reason: expect.stringMatching(/^too long/) });
   });

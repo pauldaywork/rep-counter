@@ -79,7 +79,7 @@ Hysteresis state machine:
 - **Active → Idle** when `db < offDb`. Then classify the event in this
   order:
   1. duration < `minDurationMs` (150) → rejected "too short"
-  2. duration > `maxDurationMs` (1500) → rejected "too long"
+  2. duration > `maxDurationMs` (2000) → rejected "too long"
   3. mean flatness < `minFlatness` → rejected "tonal"
   4. mean highRatio < `minHighRatio` → rejected "low-frequency"
   5. less than `minGapMs` (600) since the last rep → rejected "too soon"
