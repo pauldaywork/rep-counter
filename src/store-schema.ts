@@ -101,6 +101,7 @@ export function isSetLog(x: unknown): x is SetLog {
     typeof x.dingOnRep === "boolean" &&
     isCalibration(x.calibration) &&
     isNumber(x.quietFloorDb) &&
+    isFrames(x.quietFrames) &&
     isThresholds(x.thresholds) &&
     isTiming(x.timing) &&
     isCount(x.detectedCount) &&

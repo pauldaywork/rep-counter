@@ -8,6 +8,7 @@ import {
   noiseFloor,
   rebasedFloor,
   segmentExhales,
+  setNoiseFloor,
   thresholdsFor,
   WARMUP_MS,
   type Calibration,
@@ -33,6 +34,32 @@ function calibrated(): Calibration {
   if (!result.ok) throw new Error(result.reason);
   return result.calibration;
 }
+
+describe("setNoiseFloor", () => {
+  it("reads the background from the gaps between heavy breaths", () => {
+    // 2 s like a logged quiet check: mostly breathing, with short quiet gaps.
+    const panting = frames(
+      { ms: 400, db: -20 },
+      { ms: 300, db: -15 },
+      { ms: 150, db: -52 },
+      { ms: 500, db: -30 },
+      { ms: 150, db: -50 },
+      { ms: 600, db: -25 },
+      { ms: 300, db: -51 },
+    );
+    expect(noiseFloor(panting)).toBeGreaterThan(-31);
+    expect(setNoiseFloor(panting)).toBeLessThanOrEqual(-50);
+  });
+
+  it("matches the median when the room is steady", () => {
+    expect(setNoiseFloor(frames(quiet(400), quiet(2000)))).toBe(-70);
+  });
+
+  it("ignores the warm-up and digital silence like noiseFloor", () => {
+    expect(setNoiseFloor(frames({ ms: 400, db: -200 }, { ms: 200, db: -200 }, quiet(1000)))).toBe(-70);
+    expect(() => setNoiseFloor(frames({ ms: 1000, db: -200 }))).toThrow(/only silence/);
+  });
+});
 
 describe("noiseFloor", () => {
   it("is the median frame level", () => {

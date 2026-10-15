@@ -37,15 +37,34 @@ export const MIN_SPAN_DB = 15;
 
 /** Median level of the real audio: skips the warm-up and digital silence. */
 export function noiseFloor(frames: Frame[]): number {
+  const sorted = usableLevels(frames);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/** The share of quiet-check frames at or below the per-set noise floor. */
+export const SET_FLOOR_PERCENTILE = 0.1;
+
+/**
+ * The background level for one set, from the quietest frames of its quiet
+ * check. Between sets the user is often still breathing hard, which pushed
+ * the median up to 15 dB too high; the gaps between breaths still show the
+ * real background.
+ */
+export function setNoiseFloor(frames: Frame[]): number {
+  const sorted = usableLevels(frames);
+  return sorted[Math.floor((sorted.length - 1) * SET_FLOOR_PERCENTILE)];
+}
+
+/** Frame levels after the warm-up, without digital silence, sorted quietest first. */
+function usableLevels(frames: Frame[]): number[] {
   if (frames.length === 0) throw new Error("No audio was captured to measure the background noise.");
   const start = frames[0].t;
   const usable = frames.filter((f) => f.t - start >= WARMUP_MS && f.db >= DIGITAL_SILENCE_DB);
   if (usable.length === 0) {
     throw new Error("The microphone sent only silence. Check the headset is in headset (HFP) mode and try again.");
   }
-  const sorted = usable.map((f) => f.db).sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  return usable.map((f) => f.db).sort((a, b) => a - b);
 }
 
 /**

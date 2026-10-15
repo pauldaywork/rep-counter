@@ -138,6 +138,12 @@ while still panting cannot lift the thresholds far. It is used for that
 set only (it is not saved), and `onDb`/`offDb` are recomputed from the
 stored offsets.
 
+The per-set floor is the 10th percentile of the check's frame levels
+(`setNoiseFloor`), not the median. A logged check taken while panting
+had a median of −31 dB in a −50 dB room, which the clamp alone did not
+stop from missing soft reps; the gaps between breaths still show the
+real background. The set log keeps the check's frames.
+
 Inhales are rejected mainly because they are quieter than `onDb`. The
 600 ms gap rejects any that get through. Inhaling through the nose
 helps.

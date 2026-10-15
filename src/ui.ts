@@ -7,6 +7,7 @@ import {
   rebasedFloor,
   REQUIRED_EXHALES,
   segmentExhales,
+  setNoiseFloor,
   thresholdsFor,
   WARMUP_MS,
   type Calibration,
@@ -174,7 +175,7 @@ export class App {
     this.setStatus("Stay quiet…");
     const quiet = await this.collect(SET_QUIET_MS);
 
-    const quietFloorDb = noiseFloor(quiet);
+    const quietFloorDb = setNoiseFloor(quiet);
     const thresholds = thresholdsFor(calibration, rebasedFloor(calibration, quietFloorDb));
     const detector = new Detector(thresholds);
     const set = new RepSet(target);
@@ -218,6 +219,7 @@ export class App {
         dingOnRep,
         calibration,
         quietFloorDb,
+        quietFrames: quiet,
         thresholds,
         detectedCount: recording.detectedCount,
         finalCount: set.count,

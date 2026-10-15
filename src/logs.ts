@@ -23,6 +23,8 @@ export interface SetLog {
   calibration: Calibration;
   /** this set's measured background level, before the re-base clamp */
   quietFloorDb: number;
+  /** the quiet check the background level was measured from */
+  quietFrames: Frame[];
   thresholds: Thresholds;
   timing: DetectorTiming;
   detectedCount: number;
@@ -63,7 +65,7 @@ export type SetLogInput = Omit<SetLog, "kind" | "id" | "startedAt" | "endedAt" |
 };
 
 export function buildSetLog(input: SetLogInput): SetLog {
-  const { startedAt, endedAt, frames, ...rest } = input;
+  const { startedAt, endedAt, quietFrames, frames, ...rest } = input;
   return {
     kind: "set",
     id: logId(startedAt),
@@ -72,6 +74,7 @@ export function buildSetLog(input: SetLogInput): SetLog {
     ...rest,
     timing: { ...DEFAULT_TIMING },
     actualCount: null,
+    quietFrames: roundFrames(quietFrames),
     frames: roundFrames(frames),
   };
 }

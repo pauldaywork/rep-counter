@@ -116,6 +116,7 @@ describe("/api/logs", () => {
     dingOnRep: true,
     calibration,
     quietFloorDb: -61,
+    quietFrames: recording.frames,
     thresholds: recording.thresholds,
     detectedCount: 5,
     finalCount: 5,
