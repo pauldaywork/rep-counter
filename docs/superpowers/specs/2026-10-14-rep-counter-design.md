@@ -156,6 +156,29 @@ hook) adds:
 - `POST /api/fixtures` → writes a set recording to
   `test/fixtures/<timestamp>.json`.
 
+- `PUT /api/logs/sets/<id>` and `PUT /api/logs/calibrations/<id>` →
+  write a log to `data/logs/<kind>/<id>.json`. The id is the start time
+  (e.g. `2026-10-15T05-00-00-000Z`), may only hold letters, digits and
+  dashes, and must match the body's `id`.
+
+**Logs.** Every set and every calibration attempt is logged
+automatically, so detection can be reviewed later:
+
+- A **set log** is written when the set ends: completed, stopped, or
+  ended by an error such as a lost mic. It holds the target, outcome,
+  ding setting, the calibration used, this set's measured background
+  level and thresholds, the timing rules, every detector event (reps and
+  rejections with reasons), each +1/−1 press with its time, the detected
+  and final counts, and all frames. **Save set data** rewrites it with
+  the actual count, and still writes the test fixture.
+- A **calibration log** is written for each attempt, successful or not:
+  the quiet and exhale frames, the sounds found, the background level,
+  and the result or the failure reason.
+- A failed log save shows an error but never ends a set or calibration.
+- `npm run report` prints a summary of all logs: each calibration's
+  result, each set's counts and rejection reasons, and the total missed
+  and extra reps across sets with an actual count.
+
 The file holds one calibration per microphone, keyed by device
 **label** (e.g. `"WH-1000XM4 (Bluetooth)"`). Chrome's `deviceId` is
 not used as the key because Chrome resets it when site data is

@@ -4,6 +4,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { buildCalibrationLog, buildSetLog } from "../src/logs";
 import { createStoreHandler } from "../vite-plugin-store";
 
 const calibration = {
@@ -102,6 +103,66 @@ describe("/api/fixtures", () => {
 
   it("rejects an invalid recording", async () => {
     expect((await post("/api/fixtures", { ...recording, actualCount: -1 })).status).toBe(400);
+  });
+});
+
+describe("/api/logs", () => {
+  const setLog = buildSetLog({
+    startedAt: new Date("2026-10-15T05:00:00.000Z"),
+    endedAt: new Date("2026-10-15T05:01:00.000Z"),
+    mic: "Headset (Bluetooth)",
+    target: 5,
+    outcome: "complete",
+    dingOnRep: true,
+    calibration,
+    quietFloorDb: -61,
+    thresholds: recording.thresholds,
+    detectedCount: 5,
+    finalCount: 5,
+    events: [
+      { kind: "rep", t: 900, durationMs: 400 },
+      { kind: "rejected", t: 1200, reason: "too short (80 ms)" },
+    ],
+    adjustments: [{ t: 1500, delta: -1 }],
+    frames: recording.frames,
+  });
+  const calibrationLog = buildCalibrationLog({
+    startedAt: new Date("2026-10-15T04:59:00.000Z"),
+    mic: "Headset (Bluetooth)",
+    ok: false,
+    reason: "Heard 2 of the 3 breaths.",
+    noiseFloorDb: -61,
+    segments: [{ startT: 100, endT: 500, peakDb: -30, meanFlatness: 0.4, meanHighRatio: 0.5 }],
+    quietFrames: recording.frames,
+    exhaleFrames: recording.frames,
+  });
+
+  it("writes a set log and replaces it when saved again", async () => {
+    const url = `/api/logs/sets/${setLog.id}`;
+    const res = await put(url, setLog);
+    expect(res.status).toBe(200);
+    expect((await res.json()).path).toBe("data/logs/sets/2026-10-15T05-00-00-000Z.json");
+    expect((await put(url, { ...setLog, actualCount: 4 })).status).toBe(200);
+    const file = path.join(root, "data", "logs", "sets", `${setLog.id}.json`);
+    expect(JSON.parse(await readFile(file, "utf8"))).toEqual({ ...setLog, actualCount: 4 });
+  });
+
+  it("writes a calibration log", async () => {
+    expect((await put(`/api/logs/calibrations/${calibrationLog.id}`, calibrationLog)).status).toBe(200);
+    const file = path.join(root, "data", "logs", "calibrations", `${calibrationLog.id}.json`);
+    expect(JSON.parse(await readFile(file, "utf8"))).toEqual(calibrationLog);
+  });
+
+  it("rejects a log whose id does not match the url", async () => {
+    expect((await put("/api/logs/sets/other-id", setLog)).status).toBe(400);
+  });
+
+  it("rejects a log of the wrong kind", async () => {
+    expect((await put(`/api/logs/sets/${calibrationLog.id}`, calibrationLog)).status).toBe(400);
+  });
+
+  it("does not route ids that could escape the logs folder", async () => {
+    expect((await put("/api/logs/sets/..%2F..%2Fcalibration", setLog)).status).toBe(404);
   });
 });
 

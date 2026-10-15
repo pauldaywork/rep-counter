@@ -1,6 +1,7 @@
-import type { Calibration } from "./calibration";
-import type { DetectorTiming, Thresholds } from "./detector";
+import type { Calibration, ExhaleSegment } from "./calibration";
+import type { DetectorEvent, DetectorTiming, Thresholds } from "./detector";
 import type { Frame } from "./features";
+import type { CalibrationLog, SetLog } from "./logs";
 
 /** Contents of data/calibration.json. Calibrations are keyed by mic label. */
 export interface StoreFile {
@@ -55,6 +56,73 @@ function isTiming(x: unknown): x is DetectorTiming {
 
 function isFrame(x: unknown): x is Frame {
   return isRecord(x) && isNumber(x.t) && isNumber(x.db) && isNumber(x.flatness) && isNumber(x.highRatio);
+}
+
+const isFrames = (x: unknown): x is Frame[] => Array.isArray(x) && x.every(isFrame);
+const isOptionalString = (x: unknown) => x === undefined || typeof x === "string";
+
+function isEvent(x: unknown): x is DetectorEvent {
+  return (
+    isRecord(x) &&
+    isNumber(x.t) &&
+    ((x.kind === "rep" && isNumber(x.durationMs)) || (x.kind === "rejected" && typeof x.reason === "string"))
+  );
+}
+
+function isSegment(x: unknown): x is ExhaleSegment {
+  return (
+    isRecord(x) &&
+    isNumber(x.startT) &&
+    isNumber(x.endT) &&
+    isNumber(x.peakDb) &&
+    isNumber(x.meanFlatness) &&
+    isNumber(x.meanHighRatio)
+  );
+}
+
+export function isSetLog(x: unknown): x is SetLog {
+  return (
+    isRecord(x) &&
+    x.kind === "set" &&
+    typeof x.id === "string" &&
+    typeof x.startedAt === "string" &&
+    typeof x.endedAt === "string" &&
+    typeof x.mic === "string" &&
+    isCount(x.target) &&
+    (x.outcome === "complete" || x.outcome === "stopped" || x.outcome === "error") &&
+    isOptionalString(x.error) &&
+    typeof x.dingOnRep === "boolean" &&
+    isCalibration(x.calibration) &&
+    isNumber(x.quietFloorDb) &&
+    isThresholds(x.thresholds) &&
+    isTiming(x.timing) &&
+    isCount(x.detectedCount) &&
+    isCount(x.finalCount) &&
+    (x.actualCount === null || isCount(x.actualCount)) &&
+    Array.isArray(x.events) &&
+    x.events.every(isEvent) &&
+    Array.isArray(x.adjustments) &&
+    x.adjustments.every((a) => isRecord(a) && isNumber(a.t) && (a.delta === 1 || a.delta === -1)) &&
+    isFrames(x.frames)
+  );
+}
+
+export function isCalibrationLog(x: unknown): x is CalibrationLog {
+  return (
+    isRecord(x) &&
+    x.kind === "calibration" &&
+    typeof x.id === "string" &&
+    typeof x.startedAt === "string" &&
+    typeof x.mic === "string" &&
+    typeof x.ok === "boolean" &&
+    isOptionalString(x.reason) &&
+    (x.calibration === undefined || isCalibration(x.calibration)) &&
+    isNumber(x.noiseFloorDb) &&
+    Array.isArray(x.segments) &&
+    x.segments.every(isSegment) &&
+    isFrames(x.quietFrames) &&
+    isFrames(x.exhaleFrames)
+  );
 }
 
 export function isSetRecording(x: unknown): x is SetRecording {

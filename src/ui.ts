@@ -15,9 +15,10 @@ import { Detector, type DetectorEvent, type Thresholds } from "./detector";
 import type { Frame } from "./features";
 import { Meter } from "./meter";
 import { pickMic } from "./mic-choice";
+import { buildCalibrationLog, buildSetLog, type Adjustment, type CalibrationLog, type LogKind, type SetLog } from "./logs";
 import { buildRecording } from "./recording";
 import { RepSet } from "./rep-set";
-import { loadStore, saveRecording, saveStore } from "./store";
+import { loadStore, saveLog, saveRecording, saveStore } from "./store";
 import type { StoreFile } from "./store-schema";
 
 // Each quiet window also covers WARMUP_MS that noiseFloor discards.
@@ -32,6 +33,14 @@ interface FinishedSet {
   thresholds: Thresholds;
   frames: Frame[];
   detectedCount: number;
+}
+
+/** What happened during the running set, for its log. */
+interface SetTrace {
+  events: DetectorEvent[];
+  adjustments: Adjustment[];
+  /** time of the latest frame, to timestamp button presses */
+  lastT: number;
 }
 
 function el<T extends HTMLElement>(id: string): T {
@@ -80,14 +89,17 @@ export class App {
   private endSet: ((outcome: "complete" | "stopped") => void) | null = null;
   private currentSet: RepSet | null = null;
   private finishedSet: FinishedSet | null = null;
+  private finishedLog: SetLog | null = null;
+  private firstLogSave: Promise<void> = Promise.resolve();
+  private setTrace: SetTrace | null = null;
 
   async init(): Promise<void> {
     this.ui.start.addEventListener("click", () => void this.run(() => this.runSet()));
     this.ui.recalibrate.addEventListener("click", () => void this.run(() => this.recalibrate()));
     this.ui.mic.addEventListener("change", () => void this.chooseMic());
     this.ui.target.addEventListener("input", () => this.renderCount(0, Number(this.ui.target.value) || 0));
-    this.ui.plus.addEventListener("click", () => this.adjust(1));
-    this.ui.minus.addEventListener("click", () => this.adjust(-1));
+    this.ui.plus.addEventListener("click", () => this.adjustByHand(1));
+    this.ui.minus.addEventListener("click", () => this.adjustByHand(-1));
     this.ui.stop.addEventListener("click", () => this.endSet?.("stopped"));
     this.ui.saveForm.addEventListener("submit", (event) => {
       event.preventDefault();
@@ -157,21 +169,28 @@ export class App {
     this.setStatus("Stay quiet…");
     const quiet = await this.collect(SET_QUIET_MS);
 
-    const thresholds = thresholdsFor(calibration, rebasedFloor(calibration, noiseFloor(quiet)));
+    const quietFloorDb = noiseFloor(quiet);
+    const thresholds = thresholdsFor(calibration, rebasedFloor(calibration, quietFloorDb));
     const detector = new Detector(thresholds);
     const set = new RepSet(target);
-    const dinger = this.ui.ding.checked ? createDinger() : null;
+    const dingOnRep = this.ui.ding.checked;
+    const dinger = dingOnRep ? createDinger() : null;
     const recording: FinishedSet = { mic, thresholds, frames: [], detectedCount: 0 };
+    const trace: SetTrace = { events: [], adjustments: [], lastT: quiet.at(-1)?.t ?? 0 };
+    const startedAt = new Date();
     this.currentSet = set;
+    this.setTrace = trace;
     this.meter.reset(thresholds);
     this.ui.setControls.hidden = false;
     this.setStatus("Go!");
 
     this.frameSink = (frame) => {
       recording.frames.push(frame);
+      trace.lastT = frame.t;
       this.meter.addFrame(frame);
       const event = detector.push(frame);
       if (!event) return;
+      trace.events.push(event);
       this.meter.addEvent(event);
       if (event.kind === "rep") {
         recording.detectedCount++;
@@ -183,20 +202,49 @@ export class App {
       }
     };
 
+    const logSet = (outcome: SetLog["outcome"], error?: string) =>
+      buildSetLog({
+        startedAt,
+        endedAt: new Date(),
+        mic,
+        target,
+        outcome,
+        error,
+        dingOnRep,
+        calibration,
+        quietFloorDb,
+        thresholds,
+        detectedCount: recording.detectedCount,
+        finalCount: set.count,
+        events: trace.events,
+        adjustments: trace.adjustments,
+        frames: recording.frames,
+      });
+
     let outcome: "complete" | "stopped";
     try {
       outcome = await this.waitForSetEnd();
+    } catch (err) {
+      const logError = await this.trySaveLog("sets", logSet("error", message(err)));
+      throw logError ? new Error(`${message(err)} ${logError}`) : err;
     } finally {
       this.frameSink = null;
       this.currentSet = null;
+      this.setTrace = null;
       void dinger?.close().catch(() => {});
     }
     await this.closeMic();
     this.ui.setControls.hidden = true;
     this.finishedSet = recording;
+    this.finishedLog = logSet(outcome);
     this.ui.actual.value = String(set.count);
     this.ui.saveStatus.textContent = "";
     this.ui.saveForm.hidden = false;
+    // Saved alongside the chime so a large log doesn't delay it.
+    const logSaved = this.trySaveLog("sets", this.finishedLog).then((logError) => {
+      if (logError) this.showError(logError);
+    });
+    this.firstLogSave = logSaved;
 
     if (outcome === "complete") {
       this.setStatus("Set complete");
@@ -204,10 +252,12 @@ export class App {
     } else {
       this.setStatus("Stopped");
     }
+    await logSaved;
   }
 
   private async calibrate(mic: string): Promise<Calibration> {
     await this.openMic(mic);
+    const startedAt = new Date();
     try {
       this.meter.reset(null);
       this.setStatus("Calibrating: stay quiet…");
@@ -222,7 +272,22 @@ export class App {
       });
 
       const result = deriveCalibration(quiet, exhales);
-      if (!result.ok) throw new Error(`Calibration failed. ${result.reason}`);
+      const logError = await this.trySaveLog(
+        "calibrations",
+        buildCalibrationLog({
+          startedAt,
+          mic,
+          ok: result.ok,
+          reason: result.ok ? undefined : result.reason,
+          calibration: result.ok ? result.calibration : undefined,
+          noiseFloorDb: floor,
+          segments: segmentExhales(exhales, floor),
+          quietFrames: quiet,
+          exhaleFrames: exhales,
+        }),
+      );
+      if (logError) this.showError(logError);
+      if (!result.ok) throw new Error(`Calibration failed. ${result.reason}${logError ? ` ${logError}` : ""}`);
       const previous = this.store;
       this.store = { ...previous, lastMic: mic, mics: { ...previous.mics, [mic]: result.calibration } };
       this.renderCalibration();
@@ -355,6 +420,14 @@ export class App {
 
   // ---- set ----
 
+  /** A +1/−1 button press, logged at the time of the latest frame. */
+  private adjustByHand(delta: 1 | -1): void {
+    const trace = this.setTrace;
+    if (!trace) return;
+    trace.adjustments.push({ t: trace.lastT, delta });
+    this.adjust(delta);
+  }
+
   private adjust(delta: 1 | -1): void {
     const set = this.currentSet;
     if (!set) return;
@@ -370,11 +443,28 @@ export class App {
       this.showError("Enter how many reps you actually did.");
       return;
     }
+    if (this.finishedLog) {
+      // Let the end-of-set save land first, so it can't overwrite the actual count.
+      await this.firstLogSave;
+      this.finishedLog = { ...this.finishedLog, actualCount };
+      const logError = await this.trySaveLog("sets", this.finishedLog);
+      if (logError) this.showError(logError);
+    }
     try {
       const path = await saveRecording(buildRecording({ ...this.finishedSet, actualCount }));
       this.ui.saveStatus.textContent = `Saved to ${path}`;
     } catch (err) {
       this.showError(`Couldn't save the set data: ${message(err)}`);
+    }
+  }
+
+  /** Saves a log, returning an error message instead of throwing so a failed log never ends a flow. */
+  private async trySaveLog(kind: LogKind, log: SetLog | CalibrationLog): Promise<string | null> {
+    try {
+      await saveLog(kind, log);
+      return null;
+    } catch (err) {
+      return `Couldn't save the ${kind === "sets" ? "set" : "calibration"} log: ${message(err)}`;
     }
   }
 

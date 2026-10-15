@@ -2,13 +2,13 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import type { Plugin } from "vite";
-import { isSetRecording, isStoreFile, type StoreFile } from "./src/store-schema";
+import { isCalibrationLog, isSetLog, isSetRecording, isStoreFile, type StoreFile } from "./src/store-schema";
 
 const MAX_BODY_BYTES = 20 * 1024 * 1024;
 
 class BadRequest extends Error {}
 
-/** Serves /api/calibration and /api/fixtures from files in the project. */
+/** Serves /api/calibration, /api/fixtures and /api/logs from files in the project. */
 export function storePlugin(): Plugin {
   return {
     name: "rep-counter-store",
@@ -21,9 +21,12 @@ export function storePlugin(): Plugin {
 export function createStoreHandler(root: string) {
   const calibrationFile = path.join(root, "data", "calibration.json");
   const fixturesDir = path.join(root, "test", "fixtures");
+  const logsDir = path.join(root, "data", "logs");
 
   return async (req: IncomingMessage, res: ServerResponse, next: () => void): Promise<void> => {
     const route = `${req.method} ${req.url?.split("?")[0]}`;
+    // The id becomes a file name, so it may only hold letters, digits and dashes.
+    const logRoute = /^PUT \/api\/logs\/(sets|calibrations)\/([0-9A-Za-z-]{1,64})$/.exec(route);
     try {
       if (route === "GET /api/calibration") {
         send(res, 200, await readStore(calibrationFile));
@@ -38,6 +41,13 @@ export function createStoreHandler(root: string) {
         const name = `set-${body.recordedAt.replace(/[^0-9A-Za-z]/g, "-")}.json`;
         await writeAtomic(path.join(fixturesDir, name), `${JSON.stringify(body)}\n`);
         send(res, 200, { path: `test/fixtures/${name}` });
+      } else if (logRoute) {
+        const [, kind, id] = logRoute;
+        const body = await readJson(req);
+        const valid = kind === "sets" ? isSetLog(body) : isCalibrationLog(body);
+        if (!valid || (body as { id: string }).id !== id) throw new BadRequest("The log is not in the expected format.");
+        await writeAtomic(path.join(logsDir, kind, `${id}.json`), `${JSON.stringify(body)}\n`);
+        send(res, 200, { path: `data/logs/${kind}/${id}.json` });
       } else {
         next();
       }

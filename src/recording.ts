@@ -17,12 +17,7 @@ export function buildRecording(input: RecordingInput): SetRecording {
     mic: input.mic,
     thresholds: input.thresholds,
     timing: { ...DEFAULT_TIMING },
-    frames: input.frames.map((f) => ({
-      t: round(f.t, 1),
-      db: round(f.db, 2),
-      flatness: round(f.flatness, 4),
-      highRatio: round(f.highRatio, 4),
-    })),
+    frames: roundFrames(input.frames),
     detectedCount: input.detectedCount,
     actualCount: input.actualCount,
   };
@@ -40,6 +35,16 @@ export function replayCount(recording: SetRecording): number {
     if (detector.push(frame)?.kind === "rep") count++;
   }
   return count;
+}
+
+/** Rounds frame values to the precision saved files need, to keep them small. */
+export function roundFrames(frames: Frame[]): Frame[] {
+  return frames.map((f) => ({
+    t: round(f.t, 1),
+    db: round(f.db, 2),
+    flatness: round(f.flatness, 4),
+    highRatio: round(f.highRatio, 4),
+  }));
 }
 
 function round(value: number, places: number): number {
