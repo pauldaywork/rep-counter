@@ -1,4 +1,5 @@
 import { listMics, requestMicPermission, startMic, type MicSession } from "./audio";
+import { recordAudio, type AudioRecorder } from "./audio-recorder";
 import {
   deriveCalibration,
   exhalesComplete,
@@ -18,7 +19,7 @@ import { pickMic } from "./mic-choice";
 import { buildCalibrationLog, buildSetLog, type Adjustment, type CalibrationLog, type LogKind, type SetLog } from "./logs";
 import { buildRecording } from "./recording";
 import { RepSet } from "./rep-set";
-import { loadStore, saveLog, saveRecording, saveStore } from "./store";
+import { loadStore, saveAudio, saveLog, saveRecording, saveStore } from "./store";
 import type { StoreFile } from "./store-schema";
 
 // Each quiet window also covers WARMUP_MS that noiseFloor discards.
@@ -81,6 +82,8 @@ export class App {
   private busy = false;
 
   private session: MicSession | null = null;
+  /** records the open mic until the flow saves it with its log */
+  private audio: AudioRecorder | null = null;
   private activeMic: string | null = null;
   /** Receives frames from the open mic, if anything is listening. */
   private frameSink: ((frame: Frame) => void) | null = null;
@@ -139,6 +142,8 @@ export class App {
       this.frameSink = null;
       this.currentSet = null;
       await this.closeMic().catch(() => {});
+      // An attempt that failed before it had a log keeps no audio.
+      this.audio = null;
       this.ui.setControls.hidden = true;
       this.setStatus("Ready");
       this.showError(message(err));
@@ -225,7 +230,7 @@ export class App {
     try {
       outcome = await this.waitForSetEnd();
     } catch (err) {
-      const logError = await this.trySaveLog("sets", logSet("error", message(err)));
+      const logError = await this.trySaveAttempt("sets", logSet("error", message(err)));
       throw logError ? new Error(`${message(err)} ${logError}`) : err;
     } finally {
       this.frameSink = null;
@@ -241,7 +246,7 @@ export class App {
     this.ui.saveStatus.textContent = "";
     this.ui.saveForm.hidden = false;
     // Saved alongside the chime so a large log doesn't delay it.
-    const logSaved = this.trySaveLog("sets", this.finishedLog).then((logError) => {
+    const logSaved = this.trySaveAttempt("sets", this.finishedLog).then((logError) => {
       if (logError) this.showError(logError);
     });
     this.firstLogSave = logSaved;
@@ -272,7 +277,7 @@ export class App {
       });
 
       const result = deriveCalibration(quiet, exhales);
-      const logError = await this.trySaveLog(
+      const logError = await this.trySaveAttempt(
         "calibrations",
         buildCalibrationLog({
           startedAt,
@@ -325,6 +330,13 @@ export class App {
     }
     this.session = session;
     this.activeMic = label;
+    try {
+      this.audio = recordAudio(session.stream);
+    } catch (err) {
+      // Counting still works without the audio copy.
+      this.audio = null;
+      this.showError(`Couldn't record the audio: ${message(err)}`);
+    }
   }
 
   private async closeMic(): Promise<void> {
@@ -456,6 +468,23 @@ export class App {
     } catch (err) {
       this.showError(`Couldn't save the set data: ${message(err)}`);
     }
+  }
+
+  /** Saves an attempt's log and its audio, which share an id. Returns any error message. */
+  private async trySaveAttempt(kind: LogKind, log: SetLog | CalibrationLog): Promise<string | null> {
+    const audio = this.audio;
+    this.audio = null;
+    const saveRecordedAudio = async (): Promise<string | null> => {
+      if (!audio) return null;
+      try {
+        await saveAudio(kind, log.id, await audio.finish());
+        return null;
+      } catch (err) {
+        return `Couldn't save the ${kind === "sets" ? "set" : "calibration"} audio: ${message(err)}`;
+      }
+    };
+    const errors = await Promise.all([this.trySaveLog(kind, log), saveRecordedAudio()]);
+    return errors.filter((e) => e !== null).join(" ") || null;
   }
 
   /** Saves a log, returning an error message instead of throwing so a failed log never ends a flow. */

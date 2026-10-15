@@ -22,10 +22,16 @@ export async function saveLog(kind: LogKind, log: SetLog | CalibrationLog): Prom
   return ((await res.json()) as { path: string }).path;
 }
 
-async function request(url: string, init: RequestInit = {}): Promise<Response> {
+/** Writes an attempt's audio next to its log, as data/logs/<kind>/<id>.webm. */
+export async function saveAudio(kind: LogKind, id: string, audio: Blob): Promise<string> {
+  const res = await request(`/api/logs/${kind}/${id}.webm`, { method: "PUT", body: audio }, "audio/webm");
+  return ((await res.json()) as { path: string }).path;
+}
+
+async function request(url: string, init: RequestInit = {}, contentType = "application/json"): Promise<Response> {
   let res: Response;
   try {
-    res = await fetch(url, { ...init, headers: { "content-type": "application/json" } });
+    res = await fetch(url, { ...init, headers: { "content-type": contentType } });
   } catch {
     throw new Error("Couldn't reach the save server. Is `npm run dev` still running?");
   }

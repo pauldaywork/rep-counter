@@ -1,9 +1,11 @@
 // Summarises data/logs for reviewing how well detection works.
 // Run with `npm run report`. Uses only Node built-ins so Node runs it directly.
+import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 interface SetLog {
+  id: string;
   startedAt: string;
   mic: string;
   target: number;
@@ -20,6 +22,7 @@ interface SetLog {
 }
 
 interface CalibrationLog {
+  id: string;
   startedAt: string;
   mic: string;
   ok: boolean;
@@ -53,6 +56,12 @@ function tally(items: string[]): string {
   return [...counts].map(([item, n]) => `${item} ×${n}`).join(", ");
 }
 
+/** Names the attempt's audio file, which shares the log's id. */
+function audioNote(kind: string, id: string): string {
+  const file = path.join(logsDir, kind, `${id}.webm`);
+  return existsSync(file) ? `\n    audio: ${path.relative(process.cwd(), file)}` : "";
+}
+
 const calibrations = await readLogs<CalibrationLog>("calibrations");
 console.log(`Calibrations (${calibrations.length})`);
 for (const c of calibrations) {
@@ -60,7 +69,10 @@ for (const c of calibrations) {
     ? `ok: breaths ${db(c.calibration.onOffsetDb / 0.5)} above background, ` +
       `minFlatness ${c.calibration.minFlatness.toFixed(3)}, minHighRatio ${c.calibration.minHighRatio.toFixed(2)}`
     : `FAILED: ${c.reason}`;
-  console.log(`  ${when(c.startedAt)}  ${c.mic}  background ${db(c.noiseFloorDb)}  ${c.segments.length} sounds  ${result}`);
+  console.log(
+    `  ${when(c.startedAt)}  ${c.mic}  background ${db(c.noiseFloorDb)}  ${c.segments.length} sounds  ${result}` +
+      audioNote("calibrations", c.id),
+  );
 }
 
 const sets = await readLogs<SetLog>("sets");
@@ -72,7 +84,7 @@ for (const s of sets) {
   console.log(
     `  ${when(s.startedAt)}  ${s.mic}  target ${s.target}  detected ${s.detectedCount}  ` +
       `final ${s.finalCount} (+${plus} −${minus})  ${actual}  ${s.outcome}${s.error ? `: ${s.error}` : ""}` +
-      `${s.dingOnRep ? "  ding" : ""}`,
+      `${s.dingOnRep ? "  ding" : ""}${audioNote("sets", s.id)}`,
   );
   console.log(`    background ${db(s.quietFloorDb)}  on ${db(s.thresholds.onDb)}  off ${db(s.thresholds.offDb)}`);
   const rejected = s.events.filter((e) => e.kind === "rejected").map((e) => reasonKind(e.reason));

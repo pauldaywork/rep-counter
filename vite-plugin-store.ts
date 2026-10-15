@@ -27,6 +27,7 @@ export function createStoreHandler(root: string) {
     const route = `${req.method} ${req.url?.split("?")[0]}`;
     // The id becomes a file name, so it may only hold letters, digits and dashes.
     const logRoute = /^PUT \/api\/logs\/(sets|calibrations)\/([0-9A-Za-z-]{1,64})$/.exec(route);
+    const audioRoute = /^PUT \/api\/logs\/(sets|calibrations)\/([0-9A-Za-z-]{1,64})\.webm$/.exec(route);
     try {
       if (route === "GET /api/calibration") {
         send(res, 200, await readStore(calibrationFile));
@@ -48,6 +49,15 @@ export function createStoreHandler(root: string) {
         if (!valid || (body as { id: string }).id !== id) throw new BadRequest("The log is not in the expected format.");
         await writeAtomic(path.join(logsDir, kind, `${id}.json`), `${JSON.stringify(body)}\n`);
         send(res, 200, { path: `data/logs/${kind}/${id}.json` });
+      } else if (audioRoute) {
+        const [, kind, id] = audioRoute;
+        if (!req.headers["content-type"]?.startsWith("audio/webm")) {
+          throw new BadRequest("Expected a WebM audio request body.");
+        }
+        const body = await readBody(req);
+        if (body.length === 0) throw new BadRequest("The audio is empty.");
+        await writeAtomic(path.join(logsDir, kind, `${id}.webm`), body);
+        send(res, 200, { path: `data/logs/${kind}/${id}.webm` });
       } else {
         next();
       }
@@ -79,6 +89,15 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   if (!req.headers["content-type"]?.startsWith("application/json")) {
     throw new BadRequest("Expected a JSON request body.");
   }
+  const body = await readBody(req);
+  try {
+    return JSON.parse(body.toString("utf8"));
+  } catch {
+    throw new BadRequest("The request body is not valid JSON.");
+  }
+}
+
+async function readBody(req: IncomingMessage): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {
@@ -86,15 +105,11 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
     if (size > MAX_BODY_BYTES) throw new BadRequest("The request body is too large.");
     chunks.push(chunk as Buffer);
   }
-  try {
-    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
-  } catch {
-    throw new BadRequest("The request body is not valid JSON.");
-  }
+  return Buffer.concat(chunks);
 }
 
 /** Writes to a temp file then renames it, so a failed write cannot corrupt the target. */
-async function writeAtomic(file: string, contents: string): Promise<void> {
+async function writeAtomic(file: string, contents: string | Buffer): Promise<void> {
   await mkdir(path.dirname(file), { recursive: true });
   const temp = `${file}.${process.pid}.${Date.now()}.tmp`;
   await writeFile(temp, contents);

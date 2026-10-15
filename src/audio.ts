@@ -3,6 +3,8 @@ import workletUrl from "./features-worklet.ts?worker&url";
 
 export interface MicSession {
   readonly label: string;
+  /** the raw mic stream, for recording the audio */
+  readonly stream: MediaStream;
   stop(): Promise<void>;
 }
 
@@ -77,6 +79,7 @@ export async function startMic(
 
   return {
     label: track.label,
+    stream,
     async stop() {
       if (stopped) return;
       stopped = true;

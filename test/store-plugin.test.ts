@@ -161,6 +161,26 @@ describe("/api/logs", () => {
     expect((await put(`/api/logs/sets/${calibrationLog.id}`, calibrationLog)).status).toBe(400);
   });
 
+  it("writes an attempt's audio next to its log", async () => {
+    const audio = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 1, 2, 3]);
+    const res = await fetch(`${base}/api/logs/sets/${setLog.id}.webm`, {
+      method: "PUT",
+      headers: { "content-type": "audio/webm;codecs=opus" },
+      body: audio,
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).path).toBe("data/logs/sets/2026-10-15T05-00-00-000Z.webm");
+    expect(await readFile(path.join(root, "data", "logs", "sets", `${setLog.id}.webm`))).toEqual(audio);
+  });
+
+  it("rejects audio that is not sent as WebM, or is empty", async () => {
+    const url = `${base}/api/logs/calibrations/${calibrationLog.id}.webm`;
+    const wrongType = await fetch(url, { method: "PUT", headers: { "content-type": "text/plain" }, body: "x" });
+    expect(wrongType.status).toBe(400);
+    const empty = await fetch(url, { method: "PUT", headers: { "content-type": "audio/webm" }, body: "" });
+    expect(empty.status).toBe(400);
+  });
+
   it("does not route ids that could escape the logs folder", async () => {
     expect((await put("/api/logs/sets/..%2F..%2Fcalibration", setLog)).status).toBe(404);
   });

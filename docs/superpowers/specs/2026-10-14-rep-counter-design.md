@@ -178,7 +178,15 @@ automatically, so detection can be reviewed later:
 - A **calibration log** is written for each attempt, successful or not:
   the quiet and exhale frames, the sounds found, the background level,
   and the result or the failure reason.
-- A failed log save shows an error but never ends a set or calibration.
+- **Audio:** each mic session is also recorded with `MediaRecorder`
+  (Opus in WebM, 32 kbit/s, about 240 KB a minute) and saved next to
+  the attempt's log as `data/logs/<kind>/<id>.webm`, through
+  `PUT /api/logs/<kind>/<id>.webm` (WebM body only). Recording starts
+  when the mic opens, so audio time matches the frames' `t`. A set's
+  audio includes its 2 s quiet check. Attempts that fail before their
+  log exists keep no audio.
+- A failed log or audio save shows an error but never ends a set or
+  calibration.
 - `npm run report` prints a summary of all logs: each calibration's
   result, each set's counts and rejection reasons, and the total missed
   and extra reps across sets with an actual count.
