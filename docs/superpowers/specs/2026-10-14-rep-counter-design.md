@@ -22,8 +22,12 @@ stops listening.
   content below 4 kHz.
 - Present during a set: the user's exhales and inhales, grunts, and
   weights clanking. Not present: music, talking.
-- No audio plays during a set. The only sound is a chime when the set
-  completes.
+- By default no audio plays during a set; the only sound is a chime when
+  the set completes. An optional **Ding on each rep** checkbox (off by
+  default, not saved) plays a short 1320 Hz tone for each detected rep
+  except the last, which gets the chime. The ding plays in the
+  headphones, so the mic barely hears it; any leak is tonal and inside
+  the 600 ms gap, so the detector rejects it.
 
 ## Stack
 
@@ -192,7 +196,8 @@ One page:
   - If the active mic disappears during a set, or its track ends, the
     set stops and an error names the lost mic.
 - **Set controls:** target reps input, **Start set**, large `n / target`
-  counter, **+1 / −1** correction buttons and **Stop** during a set.
+  counter, **+1 / −1** correction buttons and **Stop** during a set,
+  and the **Ding on each rep** checkbox.
   Starting a set on an uncalibrated mic runs calibration first.
 - **Completion:** when the count reaches the target, stop listening,
   release the mic, play a short chime (synthesised oscillator tones, no
@@ -217,7 +222,7 @@ One page:
 | `src/store.ts` | Client for the `/api` endpoints |
 | `src/ui.ts` | Page state and DOM |
 | `src/meter.ts` | Canvas dB trace |
-| `src/chime.ts` | Completion sound |
+| `src/chime.ts` | Completion chime and per-rep ding |
 | `vite-plugin-store.ts` | File-backed API |
 
 ## Testing
@@ -252,5 +257,5 @@ One page:
 
 - An ML classifier (Teachable Machine / TF.js). It can be added later
   as a second stage on top of the gate if the rules prove inaccurate.
-- Phone support, workout history, audio during reps, and deployment
+- Phone support, workout history, and deployment
   anywhere other than the local dev server.

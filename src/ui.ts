@@ -10,7 +10,7 @@ import {
   WARMUP_MS,
   type Calibration,
 } from "./calibration";
-import { playChime } from "./chime";
+import { createDinger, playChime } from "./chime";
 import { Detector, type DetectorEvent, type Thresholds } from "./detector";
 import type { Frame } from "./features";
 import { Meter } from "./meter";
@@ -52,6 +52,7 @@ export class App {
     recalibrate: el<HTMLButtonElement>("recalibrate"),
     error: el<HTMLParagraphElement>("error"),
     target: el<HTMLInputElement>("target"),
+    ding: el<HTMLInputElement>("ding"),
     start: el<HTMLButtonElement>("start"),
     status: el<HTMLParagraphElement>("status"),
     countDone: el<HTMLSpanElement>("count-done"),
@@ -159,6 +160,7 @@ export class App {
     const thresholds = thresholdsFor(calibration, rebasedFloor(calibration, noiseFloor(quiet)));
     const detector = new Detector(thresholds);
     const set = new RepSet(target);
+    const dinger = this.ui.ding.checked ? createDinger() : null;
     const recording: FinishedSet = { mic, thresholds, frames: [], detectedCount: 0 };
     this.currentSet = set;
     this.meter.reset(thresholds);
@@ -174,14 +176,21 @@ export class App {
       if (event.kind === "rep") {
         recording.detectedCount++;
         this.adjust(1);
+        // The last rep gets the completion chime instead.
+        if (!set.complete) dinger?.ding();
       } else {
         this.addRejection(event);
       }
     };
 
-    const outcome = await this.waitForSetEnd();
-    this.frameSink = null;
-    this.currentSet = null;
+    let outcome: "complete" | "stopped";
+    try {
+      outcome = await this.waitForSetEnd();
+    } finally {
+      this.frameSink = null;
+      this.currentSet = null;
+      void dinger?.close().catch(() => {});
+    }
     await this.closeMic();
     this.ui.setControls.hidden = true;
     this.finishedSet = recording;
