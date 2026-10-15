@@ -14,9 +14,18 @@ export interface DetectorTiming {
   maxDurationMs: number;
   /** from the end of the last rep to the start of the next sound */
   minGapMs: number;
+  /** how long a sound must stay within HELD_WINDOW_DB of its own peak */
+  minHeldMs: number;
 }
 
-export const DEFAULT_TIMING: DetectorTiming = { minDurationMs: 150, maxDurationMs: 2000, minGapMs: 600 };
+export const DEFAULT_TIMING: DetectorTiming = { minDurationMs: 150, maxDurationMs: 2000, minGapMs: 600, minHeldMs: 200 };
+
+/**
+ * A clap or a weight's dink spikes and then fades, and its echo can keep it
+ * above offDb for longer than minDurationMs. An exhale holds near its peak;
+ * a spike drops more than this far below its peak almost at once.
+ */
+export const HELD_WINDOW_DB = 10;
 
 export type DetectorEvent =
   | { kind: "rep"; t: number; durationMs: number }
@@ -30,6 +39,7 @@ export class Detector {
   private state: "idle" | "active" | "overlong" = "idle";
   private startT = 0;
   private frameCount = 0;
+  private levels: number[] = [];
   private flatnessSum = 0;
   private highRatioSum = 0;
   private lastRepT = -Infinity;
@@ -47,6 +57,7 @@ export class Detector {
           this.state = "active";
           this.startT = frame.t;
           this.frameCount = 0;
+          this.levels = [];
           this.flatnessSum = 0;
           this.highRatioSum = 0;
           this.accumulate(frame);
@@ -71,6 +82,7 @@ export class Detector {
 
   private accumulate(frame: Frame): void {
     this.frameCount++;
+    this.levels.push(frame.db);
     this.flatnessSum += frame.flatness;
     this.highRatioSum += frame.highRatio;
   }
@@ -80,10 +92,14 @@ export class Detector {
     const flatness = this.flatnessSum / this.frameCount;
     const highRatio = this.highRatioSum / this.frameCount;
     const { minFlatness, minHighRatio } = this.thresholds;
-    const { minDurationMs, minGapMs } = this.timing;
+    const { minDurationMs, minGapMs, minHeldMs } = this.timing;
     const reject = (reason: string): DetectorEvent => ({ kind: "rejected", t: endT, reason });
 
     if (durationMs < minDurationMs) return reject(`too short (${Math.round(durationMs)} ms)`);
+    const peakDb = Math.max(...this.levels);
+    const frameMs = durationMs / this.frameCount;
+    const heldMs = this.levels.filter((db) => db >= peakDb - HELD_WINDOW_DB).length * frameMs;
+    if (heldMs < minHeldMs) return reject(`spike (near its peak for only ${Math.round(heldMs)} ms)`);
     if (flatness < minFlatness) return reject(`tonal (flatness ${flatness.toFixed(2)} < ${minFlatness.toFixed(2)})`);
     if (highRatio < minHighRatio) {
       return reject(`low-frequency (high ratio ${highRatio.toFixed(2)} < ${minHighRatio.toFixed(2)})`);

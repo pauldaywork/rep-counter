@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Detector, type DetectorEvent, type Thresholds } from "../src/detector";
 import type { Frame } from "../src/features";
-import { exhale, frames, quiet } from "./frames";
+import { exhale, frames, quiet, type Segment } from "./frames";
 
 const TH: Thresholds = { onDb: -40, offDb: -50, minFlatness: 0.3, minHighRatio: 0.3 };
 
@@ -18,6 +18,18 @@ describe("Detector", () => {
   it("rejects a clank as too short", () => {
     const events = run(frames(quiet(500), { ms: 80, db: -20 }, quiet(500)));
     expect(events).toEqual([{ kind: "rejected", t: 600, reason: expect.stringMatching(/^too short/) }]);
+  });
+
+  it("rejects a clap whose echo outlasts the minimum length as a spike", () => {
+    // Like a logged clap: a sharp peak, then a tail fading 3 dB per frame.
+    const tail = Array.from({ length: 14 }, (_, i): Segment => ({ ms: 20, db: -8 - 3 * i }));
+    const events = run(frames(quiet(500), ...tail, quiet(500)));
+    expect(events).toEqual([{ kind: "rejected", t: 800, reason: expect.stringMatching(/^spike/) }]);
+  });
+
+  it("counts an exhale that bursts at the start and then holds lower", () => {
+    const events = run(frames(quiet(500), { ms: 40, db: -15 }, exhale(400, -24), quiet(500)));
+    expect(events.map((e) => e.kind)).toEqual(["rep"]);
   });
 
   it("rejects a grunt as tonal", () => {

@@ -51,7 +51,14 @@ function isThresholds(x: unknown): x is Thresholds {
 }
 
 function isTiming(x: unknown): x is DetectorTiming {
-  return isRecord(x) && isNumber(x.minDurationMs) && isNumber(x.maxDurationMs) && isNumber(x.minGapMs);
+  // minHeldMs was added later, so files saved before it may lack it.
+  return (
+    isRecord(x) &&
+    isNumber(x.minDurationMs) &&
+    isNumber(x.maxDurationMs) &&
+    isNumber(x.minGapMs) &&
+    (x.minHeldMs === undefined || isNumber(x.minHeldMs))
+  );
 }
 
 function isFrame(x: unknown): x is Frame {

@@ -79,6 +79,10 @@ Hysteresis state machine:
 - **Active → Idle** when `db < offDb`. Then classify the event in this
   order:
   1. duration < `minDurationMs` (150) → rejected "too short"
+  1a. time within 10 dB of the event's own peak < `minHeldMs` (200) →
+     rejected "spike". A clap or a weight's dink spikes and fades, and
+     its echo can keep it above `offDb` past 150 ms; an exhale holds
+     near its peak.
   2. duration > `maxDurationMs` (2000) → rejected "too long"
   3. mean flatness < `minFlatness` → rejected "tonal"
   4. mean highRatio < `minHighRatio` → rejected "low-frequency"
@@ -256,6 +260,8 @@ One page:
 - **`detector.ts`** (synthetic frame sequences):
   - a clean exhale counts
   - a clank (80 ms) is rejected as too short
+  - a clap whose fading echo lasts 280 ms is rejected as a spike
+  - an exhale with a loud first burst that then holds lower counts
   - a grunt (low flatness) is rejected as tonal
   - a quiet inhale never opens the gate
   - two exhales 400 ms apart count once
