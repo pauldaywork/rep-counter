@@ -1,5 +1,6 @@
 // Summarises data/logs for reviewing how well detection works.
-// Run with `npm run report`. Uses only Node built-ins so Node runs it directly.
+// Run with `npm run report`, or `npm run report -- data-routine` for the
+// routine page's logs. Uses only Node built-ins so Node runs it directly.
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -19,6 +20,7 @@ interface SetLog {
   actualCount: number | null;
   events: { kind: string; reason?: string }[];
   adjustments: { delta: number }[];
+  routine?: { runId: string; workout: string; activity: string; set: number; sets: number };
 }
 
 interface CalibrationLog {
@@ -32,7 +34,7 @@ interface CalibrationLog {
   segments: unknown[];
 }
 
-const logsDir = path.join(import.meta.dirname, "..", "data", "logs");
+const logsDir = path.join(import.meta.dirname, "..", process.argv[2] ?? "data", "logs");
 
 async function readLogs<T>(kind: string): Promise<T[]> {
   let names: string[];
@@ -81,8 +83,9 @@ for (const s of sets) {
   const plus = s.adjustments.filter((a) => a.delta > 0).length;
   const minus = s.adjustments.length - plus;
   const actual = s.actualCount === null ? "actual not entered" : `actual ${s.actualCount}`;
+  const step = s.routine ? `${s.routine.workout}: ${s.routine.activity} set ${s.routine.set}/${s.routine.sets}  ` : "";
   console.log(
-    `  ${when(s.startedAt)}  ${s.mic}  target ${s.target}  detected ${s.detectedCount}  ` +
+    `  ${when(s.startedAt)}  ${step}${s.mic}  target ${s.target}  detected ${s.detectedCount}  ` +
       `final ${s.finalCount} (+${plus} −${minus})  ${actual}  ${s.outcome}${s.error ? `: ${s.error}` : ""}` +
       `${s.dingOnRep ? "  ding" : ""}${audioNote("sets", s.id)}`,
   );

@@ -9,6 +9,28 @@ export interface StoreFile {
   mics: Record<string, Calibration>;
 }
 
+/** One exercise in a workout: `sets` sets of `reps` reps each. */
+export interface Activity {
+  name: string;
+  reps: number;
+  sets: number;
+}
+
+/** A named list of activities, run set by set on the routine page. */
+export interface Workout {
+  id: string;
+  name: string;
+  activities: Activity[];
+  /** the rest between sets; 0 waits for a button press instead */
+  restSeconds: number;
+}
+
+/** Contents of data-routine/workouts.json: every saved workout, and the one last chosen. */
+export interface WorkoutLibrary {
+  lastWorkout?: string;
+  workouts: Workout[];
+}
+
 /** One set's audio features, saved to test/fixtures for regression tests. */
 export interface SetRecording {
   recordedAt: string;
@@ -34,6 +56,44 @@ export function isCalibration(x: unknown): x is Calibration {
     isNumber(x.offOffsetDb) &&
     isNumber(x.minFlatness) &&
     isNumber(x.minHighRatio)
+  );
+}
+
+const isPositiveCount = (x: unknown): x is number => Number.isInteger(x) && (x as number) >= 1;
+
+function isActivity(x: unknown): x is Activity {
+  return isRecord(x) && typeof x.name === "string" && x.name.trim() !== "" && isPositiveCount(x.reps) && isPositiveCount(x.sets);
+}
+
+export function isWorkout(x: unknown): x is Workout {
+  return (
+    isRecord(x) &&
+    typeof x.id === "string" &&
+    x.id !== "" &&
+    typeof x.name === "string" &&
+    x.name.trim() !== "" &&
+    Array.isArray(x.activities) &&
+    x.activities.every(isActivity) &&
+    isCount(x.restSeconds)
+  );
+}
+
+export function isWorkoutLibrary(x: unknown): x is WorkoutLibrary {
+  if (!isRecord(x) || !isOptionalString(x.lastWorkout) || !Array.isArray(x.workouts) || !x.workouts.every(isWorkout)) {
+    return false;
+  }
+  const ids = x.workouts.map((w) => w.id);
+  return new Set(ids).size === ids.length;
+}
+
+function isRoutineStep(x: unknown): boolean {
+  return (
+    isRecord(x) &&
+    typeof x.runId === "string" &&
+    typeof x.workout === "string" &&
+    typeof x.activity === "string" &&
+    isPositiveCount(x.set) &&
+    isPositiveCount(x.sets)
   );
 }
 
@@ -111,7 +171,8 @@ export function isSetLog(x: unknown): x is SetLog {
     x.events.every(isEvent) &&
     Array.isArray(x.adjustments) &&
     x.adjustments.every((a) => isRecord(a) && isNumber(a.t) && (a.delta === 1 || a.delta === -1)) &&
-    isFrames(x.frames)
+    isFrames(x.frames) &&
+    (x.routine === undefined || isRoutineStep(x.routine))
   );
 }
 

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildCalibrationLog, buildSetLog } from "../src/logs";
-import { createStoreHandler } from "../vite-plugin-store";
+import { createStoreHandler, ROUTINE_STORE } from "../vite-plugin-store";
 
 const calibration = {
   calibratedAt: "2026-10-14T05:00:00.000Z",
@@ -32,11 +32,15 @@ let base: string;
 
 beforeEach(async () => {
   root = await mkdtemp(path.join(tmpdir(), "rep-counter-"));
+  // Chained as the plugin chains them, so each store sees the other's routes.
   const handler = createStoreHandler(root);
+  const routineHandler = createStoreHandler(root, ROUTINE_STORE);
   server = createServer((req, res) => {
     void handler(req, res, () => {
-      res.statusCode = 404;
-      res.end();
+      void routineHandler(req, res, () => {
+        res.statusCode = 404;
+        res.end();
+      });
     });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -184,6 +188,69 @@ describe("/api/logs", () => {
 
   it("does not route ids that could escape the logs folder", async () => {
     expect((await put("/api/logs/sets/..%2F..%2Fcalibration", setLog)).status).toBe(404);
+  });
+
+  it("accepts a set log that says where it sits in a workout, and rejects a bad one", async () => {
+    const routine = { runId: "2026-10-15T04-58-00-000Z", workout: "Legs", activity: "Squat", set: 2, sets: 3 };
+    expect((await put(`/api/logs/sets/${setLog.id}`, { ...setLog, routine })).status).toBe(200);
+    expect((await put(`/api/logs/sets/${setLog.id}`, { ...setLog, routine: { ...routine, set: 0 } })).status).toBe(400);
+  });
+
+  it("keeps the routine page's logs, audio and fixtures in data-routine", async () => {
+    const res = await put(`/api/routine/logs/sets/${setLog.id}`, setLog);
+    expect((await res.json()).path).toBe("data-routine/logs/sets/2026-10-15T05-00-00-000Z.json");
+    await readFile(path.join(root, "data-routine", "logs", "sets", `${setLog.id}.json`), "utf8");
+    const audio = await fetch(`${base}/api/routine/logs/sets/${setLog.id}.webm`, {
+      method: "PUT",
+      headers: { "content-type": "audio/webm" },
+      body: Buffer.from([1, 2, 3]),
+    });
+    expect((await audio.json()).path).toBe("data-routine/logs/sets/2026-10-15T05-00-00-000Z.webm");
+    const fixture = await post("/api/routine/fixtures", recording);
+    expect((await fixture.json()).path).toBe("data-routine/fixtures/set-2026-10-14T05-10-00-000Z.json");
+    await expect(readdir(path.join(root, "data"))).rejects.toThrow();
+  });
+});
+
+describe("/api/routine", () => {
+  it("keeps its own calibration, apart from data/calibration.json", async () => {
+    expect((await put("/api/routine/calibration", store)).status).toBe(200);
+    expect(JSON.parse(await readFile(path.join(root, "data-routine", "calibration.json"), "utf8"))).toEqual(store);
+    expect(await (await fetch(`${base}/api/calibration`)).json()).toEqual({ mics: {} });
+  });
+
+  it("returns no workouts when none are saved, then saves and loads them", async () => {
+    expect(await (await fetch(`${base}/api/routine/workouts`)).json()).toEqual({ workouts: [] });
+    const library = {
+      lastWorkout: "w2",
+      workouts: [
+        { id: "w1", name: "Legs", activities: [{ name: "Squat", reps: 10, sets: 3 }], restSeconds: 45 },
+        { id: "w2", name: "Arms", activities: [], restSeconds: 60 },
+      ],
+    };
+    expect((await put("/api/routine/workouts", library)).status).toBe(200);
+    expect(await (await fetch(`${base}/api/routine/workouts`)).json()).toEqual(library);
+    expect(JSON.parse(await readFile(path.join(root, "data-routine", "workouts.json"), "utf8"))).toEqual(library);
+  });
+
+  it("rejects workouts with a nameless activity, no sets, a blank name or a repeated id", async () => {
+    const legs = { id: "w1", name: "Legs", activities: [{ name: "Squat", reps: 10, sets: 3 }], restSeconds: 60 };
+    const bad = [
+      { workouts: [{ ...legs, activities: [{ name: " ", reps: 10, sets: 3 }] }] },
+      { workouts: [{ ...legs, activities: [{ name: "Squat", reps: 10, sets: 0 }] }] },
+      { workouts: [{ ...legs, restSeconds: -5 }] },
+      { workouts: [{ ...legs, name: "" }] },
+      { workouts: [legs, { ...legs, name: "Legs again" }] },
+    ];
+    for (const library of bad) expect((await put("/api/routine/workouts", library)).status).toBe(400);
+  });
+
+  it("reports a corrupt workout file instead of replacing it", async () => {
+    await mkdir(path.join(root, "data-routine"), { recursive: true });
+    await writeFile(path.join(root, "data-routine", "workouts.json"), "{oops");
+    const res = await fetch(`${base}/api/routine/workouts`);
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toBe("data-routine/workouts.json is not valid JSON. Fix or delete it.");
   });
 });
 

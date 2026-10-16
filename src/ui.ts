@@ -17,10 +17,18 @@ import { Detector, type DetectorEvent, type Thresholds } from "./detector";
 import type { Frame } from "./features";
 import { Meter } from "./meter";
 import { pickMic } from "./mic-choice";
-import { buildCalibrationLog, buildSetLog, type Adjustment, type CalibrationLog, type LogKind, type SetLog } from "./logs";
+import {
+  buildCalibrationLog,
+  buildSetLog,
+  type Adjustment,
+  type CalibrationLog,
+  type LogKind,
+  type RoutineStep,
+  type SetLog,
+} from "./logs";
 import { buildRecording } from "./recording";
 import { RepSet } from "./rep-set";
-import { loadStore, saveAudio, saveLog, saveRecording, saveStore } from "./store";
+import type { Store } from "./store";
 import type { StoreFile } from "./store-schema";
 
 // Each quiet window also covers WARMUP_MS that noiseFloor discards.
@@ -33,6 +41,14 @@ const REJECTIONS_SHOWN = 8;
 // a Bluetooth headset switching to headset (HFP) mode, so poll as well.
 const MIC_POLL_MS = 2000;
 const NO_MIC_STATUS = "No microphone found. Connect the headset and switch it to headset (HFP) mode.";
+
+/** The set to run next: how many reps, and where it sits in a workout if it's in one. */
+export interface SetPlan {
+  target: number;
+  routine?: RoutineStep;
+}
+
+export type SetOutcome = "complete" | "stopped";
 
 interface FinishedSet {
   mic: string;
@@ -49,17 +65,21 @@ interface SetTrace {
   lastT: number;
 }
 
-function el<T extends HTMLElement>(id: string): T {
+export function el<T extends HTMLElement>(id: string): T {
   const element = document.getElementById(id);
   if (!element) throw new Error(`The page is missing #${id}.`);
   return element as T;
 }
 
-function message(err: unknown): string {
+export function message(err: unknown): string {
   if (err instanceof Error) return err.message || err.name;
   return String(err);
 }
 
+/**
+ * The mic, calibration, set counting and tuning shared by both pages. Each
+ * page adds its own controls for choosing which set to run.
+ */
 export class App {
   private readonly ui = {
     mic: el<HTMLSelectElement>("mic"),
@@ -67,9 +87,7 @@ export class App {
     calStatus: el<HTMLSpanElement>("cal-status"),
     recalibrate: el<HTMLButtonElement>("recalibrate"),
     error: el<HTMLParagraphElement>("error"),
-    target: el<HTMLInputElement>("target"),
     ding: el<HTMLInputElement>("ding"),
-    start: el<HTMLButtonElement>("start"),
     status: el<HTMLParagraphElement>("status"),
     countDone: el<HTMLSpanElement>("count-done"),
     countTarget: el<HTMLSpanElement>("count-target"),
@@ -88,6 +106,8 @@ export class App {
   /** the latest mic refresh, so refreshes run one at a time and in order */
   private micRefresh: Promise<void> = Promise.resolve();
   private busy = false;
+  /** the page's own controls, disabled while a flow runs */
+  private readonly pageControls: { disabled: boolean }[] = [];
 
   private session: MicSession | null = null;
   /** records the open mic until the flow saves it with its log */
@@ -97,21 +117,29 @@ export class App {
   private frameSink: ((frame: Frame) => void) | null = null;
   /** Rejects whatever the current flow is waiting on, when the mic is lost. */
   private pending: { reject: (err: Error) => void } | null = null;
-  private endSet: ((outcome: "complete" | "stopped") => void) | null = null;
+  private endSet: ((outcome: SetOutcome) => void) | null = null;
+  /** a stop asked for before the running set started counting */
+  private stopRequested = false;
   private currentSet: RepSet | null = null;
   private finishedSet: FinishedSet | null = null;
   private finishedLog: SetLog | null = null;
   private firstLogSave: Promise<void> = Promise.resolve();
   private setTrace: SetTrace | null = null;
 
+  constructor(private readonly api: Store) {}
+
+  /** Disables these controls whenever a flow is running. Call before init. */
+  lockWhileBusy(...controls: { disabled: boolean }[]): void {
+    this.pageControls.push(...controls);
+    for (const control of controls) control.disabled = this.busy;
+  }
+
   async init(): Promise<void> {
-    this.ui.start.addEventListener("click", () => void this.run(() => this.runSet()));
     this.ui.recalibrate.addEventListener("click", () => void this.run(() => this.recalibrate()));
     this.ui.mic.addEventListener("change", () => void this.chooseMic());
-    this.ui.target.addEventListener("input", () => this.renderCount(0, Number(this.ui.target.value) || 0));
     this.ui.plus.addEventListener("click", () => this.adjustByHand(1));
     this.ui.minus.addEventListener("click", () => this.adjustByHand(-1));
-    this.ui.stop.addEventListener("click", () => this.endSet?.("stopped"));
+    this.ui.stop.addEventListener("click", () => this.stopSet());
     this.ui.saveForm.addEventListener("submit", (event) => {
       event.preventDefault();
       void this.saveSet();
@@ -120,7 +148,7 @@ export class App {
     // Without the saved calibrations, a later save would overwrite the file,
     // so stop here and leave the controls disabled until it is fixed.
     try {
-      this.store = await loadStore();
+      this.store = await this.api.loadStore();
     } catch (err) {
       this.setBusy(true);
       this.showError(`Couldn't load saved calibrations: ${message(err)}`);
@@ -147,7 +175,7 @@ export class App {
   // ---- flows ----
 
   /** Runs one flow at a time, showing any error it ends with. */
-  private async run(flow: () => Promise<void>): Promise<void> {
+  async run(flow: () => Promise<void>): Promise<void> {
     if (this.busy) return;
     this.setBusy(true);
     this.clearError();
@@ -174,9 +202,11 @@ export class App {
     this.setStatus("Calibrated. Ready.");
   }
 
-  private async runSet(): Promise<void> {
-    const target = Number(this.ui.target.value);
+  /** Runs one set, calibrating first if the mic needs it. Call from inside `run`. */
+  async runSet(plan: SetPlan): Promise<SetOutcome> {
+    const { target, routine } = plan;
     if (!Number.isInteger(target) || target < 1) throw new Error("Enter a target of at least 1 rep.");
+    this.stopRequested = false;
     const mic = this.selectedMic();
     const calibration = this.store.mics[mic] ?? (await this.calibrate(mic));
 
@@ -240,9 +270,10 @@ export class App {
         events: trace.events,
         adjustments: trace.adjustments,
         frames: recording.frames,
+        routine,
       });
 
-    let outcome: "complete" | "stopped";
+    let outcome: SetOutcome;
     try {
       outcome = await this.waitForSetEnd();
     } catch (err) {
@@ -274,6 +305,7 @@ export class App {
       this.setStatus("Stopped");
     }
     await logSaved;
+    return outcome;
   }
 
   private async calibrate(mic: string): Promise<Calibration> {
@@ -313,7 +345,7 @@ export class App {
       this.store = { ...previous, lastMic: mic, mics: { ...previous.mics, [mic]: result.calibration } };
       this.renderCalibration();
       try {
-        await saveStore(this.store);
+        await this.api.saveStore(this.store);
       } catch (err) {
         this.store = previous;
         this.renderCalibration();
@@ -405,7 +437,8 @@ export class App {
     });
   }
 
-  private waitForSetEnd(): Promise<"complete" | "stopped"> {
+  private waitForSetEnd(): Promise<SetOutcome> {
+    if (this.stopRequested) return Promise.resolve("stopped");
     return new Promise((resolve, reject) => {
       this.pending = { reject };
       this.endSet = (outcome) => {
@@ -446,7 +479,7 @@ export class App {
     this.renderCalibration();
     this.store = { ...this.store, lastMic: this.ui.mic.value };
     try {
-      await saveStore(this.store);
+      await this.api.saveStore(this.store);
     } catch (err) {
       this.showError(`Couldn't save the mic choice: ${message(err)}`);
     }
@@ -459,6 +492,12 @@ export class App {
   }
 
   // ---- set ----
+
+  /** Ends the running set early, as the Stop button does, or stops it as soon as it starts counting. */
+  stopSet(): void {
+    if (this.endSet) this.endSet("stopped");
+    else this.stopRequested = true;
+  }
 
   /** A +1/−1 button press, logged at the time of the latest frame. */
   private adjustByHand(delta: 1 | -1): void {
@@ -491,7 +530,7 @@ export class App {
       if (logError) this.showError(logError);
     }
     try {
-      const path = await saveRecording(buildRecording({ ...this.finishedSet, actualCount }));
+      const path = await this.api.saveRecording(buildRecording({ ...this.finishedSet, actualCount }));
       this.ui.saveStatus.textContent = `Saved to ${path}`;
     } catch (err) {
       this.showError(`Couldn't save the set data: ${message(err)}`);
@@ -505,7 +544,7 @@ export class App {
     const saveRecordedAudio = async (): Promise<string | null> => {
       if (!audio) return null;
       try {
-        await saveAudio(kind, log.id, await audio.finish());
+        await this.api.saveAudio(kind, log.id, await audio.finish());
         return null;
       } catch (err) {
         return `Couldn't save the ${kind === "sets" ? "set" : "calibration"} audio: ${message(err)}`;
@@ -518,7 +557,7 @@ export class App {
   /** Saves a log, returning an error message instead of throwing so a failed log never ends a flow. */
   private async trySaveLog(kind: LogKind, log: SetLog | CalibrationLog): Promise<string | null> {
     try {
-      await saveLog(kind, log);
+      await this.api.saveLog(kind, log);
       return null;
     } catch (err) {
       return `Couldn't save the ${kind === "sets" ? "set" : "calibration"} log: ${message(err)}`;
@@ -527,7 +566,7 @@ export class App {
 
   // ---- rendering ----
 
-  private renderCount(done: number, target: number): void {
+  renderCount(done: number, target: number): void {
     this.ui.countDone.textContent = String(done);
     this.ui.countTarget.textContent = String(target);
   }
@@ -548,18 +587,17 @@ export class App {
 
   private setBusy(busy: boolean): void {
     this.busy = busy;
-    this.ui.start.disabled = busy;
     this.ui.recalibrate.disabled = busy;
     this.ui.mic.disabled = busy;
     this.ui.refreshMics.disabled = busy;
-    this.ui.target.disabled = busy;
+    for (const control of this.pageControls) control.disabled = busy;
   }
 
-  private setStatus(text: string): void {
+  setStatus(text: string): void {
     this.ui.status.textContent = text;
   }
 
-  private showError(text: string): void {
+  showError(text: string): void {
     this.ui.error.textContent = text;
     this.ui.error.hidden = false;
   }

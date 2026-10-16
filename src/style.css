@@ -143,3 +143,126 @@ input:disabled {
   gap: 8px 12px;
   align-items: center;
 }
+
+.page-link {
+  margin-left: auto;
+  color: var(--accent);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+#start,
+#skip-rest {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+  font-size: 1.25rem;
+  padding: 12px 32px;
+}
+
+#now {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+#now:empty {
+  display: none;
+}
+
+#builder {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 16px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+#builder legend {
+  padding: 0 4px;
+  font-weight: 600;
+}
+
+#builder small {
+  color: var(--muted);
+  margin-top: -8px;
+}
+
+#activities {
+  margin: 0;
+  padding-left: 1.5rem;
+  display: grid;
+  gap: 6px;
+}
+
+#activities li {
+  padding-left: 4px;
+}
+
+#activities li > * {
+  vertical-align: middle;
+}
+
+#activities .activity-name {
+  font-weight: 600;
+}
+
+#activities .activity-detail {
+  color: var(--muted);
+  margin: 0 12px 0 8px;
+}
+
+#activities button {
+  padding: 2px 8px;
+  margin-right: 4px;
+}
+
+#activities li.current .activity-name {
+  color: var(--accent);
+}
+
+#activities li.done .activity-name {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+#workout-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+#workout-select {
+  min-width: 12em;
+}
+
+#no-activities {
+  margin: 0;
+  color: var(--muted);
+}
+
+#add-activity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: end;
+}
+
+#add-activity label {
+  display: grid;
+}
+
+#activity-reps,
+#activity-sets,
+#rest {
+  width: 6em;
+}

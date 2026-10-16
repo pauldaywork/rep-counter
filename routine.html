@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rep Counter · Routine</title>
+  </head>
+  <body>
+    <main>
+      <header>
+        <label>Mic <select id="mic"></select></label>
+        <button id="refresh-mics" type="button" title="Look for newly connected mics">↻</button>
+        <span id="cal-status">Not calibrated</span>
+        <button id="recalibrate" type="button">Recalibrate</button>
+        <a class="page-link" href="/">← Single set</a>
+      </header>
+
+      <p id="error" role="alert" hidden></p>
+
+      <fieldset id="builder">
+        <legend>Workout</legend>
+        <div id="workout-picker">
+          <label>Saved workouts <select id="workout-select"></select></label>
+          <button id="new-workout" type="button">New</button>
+          <button id="delete-workout" type="button">Delete</button>
+        </div>
+        <label>Name <input id="workout-name" type="text" autocomplete="off" /></label>
+        <ol id="activities"></ol>
+        <p id="no-activities">No activities yet. Add the first one below.</p>
+        <form id="add-activity">
+          <label>Activity <input id="activity-name" type="text" placeholder="Squat" autocomplete="off" /></label>
+          <label>Reps per set <input id="activity-reps" type="number" min="1" step="1" value="10" /></label>
+          <label>Sets <input id="activity-sets" type="number" min="1" step="1" value="3" /></label>
+          <button type="submit">Add</button>
+        </form>
+        <label>Rest between sets <input id="rest" type="number" min="0" step="5" value="60" /> s</label>
+        <small>0 waits until you press Start next set.</small>
+      </fieldset>
+
+      <section id="set">
+        <label><input id="ding" type="checkbox" /> Ding on each rep</label>
+        <div class="row">
+          <button id="start" type="button">Start workout</button>
+          <button id="restart" type="button" hidden>Start over</button>
+        </div>
+        <p id="now"></p>
+        <p id="status" aria-live="polite">Ready</p>
+        <p id="count"><span id="count-done">0</span> / <span id="count-target">0</span></p>
+        <div id="set-controls" hidden>
+          <button id="minus" type="button">−1</button>
+          <button id="plus" type="button">+1</button>
+          <button id="stop" type="button">Stop set</button>
+        </div>
+        <div id="workout-controls" class="row" hidden>
+          <button id="skip-rest" type="button" hidden>Skip rest</button>
+          <button id="end-workout" type="button">End workout</button>
+        </div>
+      </section>
+
+      <details id="tuning" open>
+        <summary>Tuning</summary>
+        <canvas id="meter"></canvas>
+        <ol id="rejections"></ol>
+        <form id="save-set" hidden>
+          <label>Reps you actually did <input id="actual" type="number" min="0" step="1" /></label>
+          <button type="submit">Save set data</button>
+          <span id="save-status"></span>
+        </form>
+      </details>
+    </main>
+    <script type="module" src="/src/routine.ts"></script>
+  </body>
+</html>

@@ -9,6 +9,18 @@ export interface Adjustment {
   delta: 1 | -1;
 }
 
+/** Where a set sits in a routine-page workout. */
+export interface RoutineStep {
+  /** shared by every set of one run through the workout */
+  runId: string;
+  /** the workout's name at the time */
+  workout: string;
+  activity: string;
+  /** 1-based */
+  set: number;
+  sets: number;
+}
+
 /** Everything about one set, saved automatically to data/logs/sets. */
 export interface SetLog {
   kind: "set";
@@ -35,6 +47,8 @@ export interface SetLog {
   events: DetectorEvent[];
   adjustments: Adjustment[];
   frames: Frame[];
+  /** only on sets run from the routine page */
+  routine?: RoutineStep;
 }
 
 /** One calibration attempt, saved automatically to data/logs/calibrations. */
