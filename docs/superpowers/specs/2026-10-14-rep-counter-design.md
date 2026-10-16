@@ -229,8 +229,11 @@ One page:
   permission), **Recalibrate** button, and a "Calibrated ✓ /
   Not calibrated" status for the selected mic.
   - The dropdown refreshes on the `navigator.mediaDevices`
-    `devicechange` event, so a headset that connects or switches to
-    headset (HFP) mode appears without a page reload.
+    `devicechange` event, when the page regains focus, every 2 s while
+    the tab is visible, and from a ↻ button beside it, so a headset that
+    connects or switches to headset (HFP) mode appears without a page
+    reload. Chrome on Linux doesn't fire `devicechange` for every
+    PipeWire change, hence the polling.
   - When the list refreshes, the last mic the user chose (`lastMic`) is
     selected whenever it is present; otherwise the current selection is
     kept, else the first mic.

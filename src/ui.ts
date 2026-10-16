@@ -29,6 +29,10 @@ const SET_QUIET_MS = 2000 + WARMUP_MS;
 const NO_FRAME_TIMEOUT_MS = 3000;
 const EXHALE_TIMEOUT_MS = 10_000;
 const REJECTIONS_SHOWN = 8;
+// Chrome on Linux doesn't fire devicechange when PipeWire adds a mic, e.g.
+// a Bluetooth headset switching to headset (HFP) mode, so poll as well.
+const MIC_POLL_MS = 2000;
+const NO_MIC_STATUS = "No microphone found. Connect the headset and switch it to headset (HFP) mode.";
 
 interface FinishedSet {
   mic: string;
@@ -59,6 +63,7 @@ function message(err: unknown): string {
 export class App {
   private readonly ui = {
     mic: el<HTMLSelectElement>("mic"),
+    refreshMics: el<HTMLButtonElement>("refresh-mics"),
     calStatus: el<HTMLSpanElement>("cal-status"),
     recalibrate: el<HTMLButtonElement>("recalibrate"),
     error: el<HTMLParagraphElement>("error"),
@@ -80,6 +85,8 @@ export class App {
   private readonly meter = new Meter(el<HTMLCanvasElement>("meter"));
   private store: StoreFile = { mics: {} };
   private mics: MediaDeviceInfo[] = [];
+  /** the latest mic refresh, so refreshes run one at a time and in order */
+  private micRefresh: Promise<void> = Promise.resolve();
   private busy = false;
 
   private session: MicSession | null = null;
@@ -126,7 +133,14 @@ export class App {
       this.showError(`Microphone access is needed to count reps: ${message(err)}`);
       return;
     }
-    navigator.mediaDevices.addEventListener("devicechange", () => void this.refreshMics());
+    const refresh = () => void this.refreshMics();
+    navigator.mediaDevices.addEventListener("devicechange", refresh);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    window.setInterval(() => {
+      if (!document.hidden) refresh();
+    }, MIC_POLL_MS);
+    this.ui.refreshMics.addEventListener("click", refresh);
     await this.refreshMics();
   }
 
@@ -402,17 +416,29 @@ export class App {
     });
   }
 
-  private async refreshMics(): Promise<void> {
+  /** Rereads the connected mics. Refreshes queue so a stale list never wins. */
+  private refreshMics(): Promise<void> {
+    this.micRefresh = this.micRefresh.then(
+      () => this.applyMics(),
+      () => this.applyMics(),
+    );
+    return this.micRefresh;
+  }
+
+  private async applyMics(): Promise<void> {
     this.mics = await listMics();
     const labels = this.mics.map((m) => m.label);
     if (this.activeMic !== null && !labels.includes(this.activeMic)) this.loseMic(this.activeMic);
 
+    // Rebuilding an unchanged list would close the dropdown under the user on every poll.
+    const shown = Array.from(this.ui.mic.options, (option) => option.value);
+    if (shown.length > 0 && shown.length === labels.length && shown.every((label, i) => label === labels[i])) return;
+
     const chosen = pickMic(labels, this.ui.mic.value || null, this.store.lastMic);
     this.ui.mic.replaceChildren(...labels.map((label) => new Option(label, label)));
     if (chosen !== null) this.ui.mic.value = chosen;
-    if (labels.length === 0) {
-      this.setStatus("No microphone found. Connect the headset and switch it to headset (HFP) mode.");
-    }
+    if (labels.length === 0) this.setStatus(NO_MIC_STATUS);
+    else if (this.ui.status.textContent === NO_MIC_STATUS) this.setStatus("");
     this.renderCalibration();
   }
 
@@ -525,6 +551,7 @@ export class App {
     this.ui.start.disabled = busy;
     this.ui.recalibrate.disabled = busy;
     this.ui.mic.disabled = busy;
+    this.ui.refreshMics.disabled = busy;
     this.ui.target.disabled = busy;
   }
 
