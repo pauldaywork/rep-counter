@@ -1,0 +1,33 @@
+{
+  "lastWorkout": "76036bda-439e-4ae0-afee-887c43138269",
+  "workouts": [
+    {
+      "id": "76036bda-439e-4ae0-afee-887c43138269",
+      "name": "Regular Weights",
+      "activities": [
+        {
+          "name": "hip thrust",
+          "reps": 10,
+          "sets": 3
+        },
+        {
+          "name": "rows",
+          "reps": 20,
+          "sets": 3
+        },
+        {
+          "name": "squats",
+          "reps": 20,
+          "sets": 3
+        },
+        {
+          "name": "chest press",
+          "reps": 10,
+          "sets": 3
+        }
+      ],
+      "restSeconds": 30,
+      "alternateSets": true
+    }
+  ]
+}

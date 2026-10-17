@@ -1,0 +1,13 @@
+{
+  "mics": {
+    "Paul’s Powerbeats Pro": {
+      "calibratedAt": "2026-10-17T08:08:55.298Z",
+      "noiseFloorDb": -59.3583030132202,
+      "onOffsetDb": 9.503398183363991,
+      "offOffsetDb": 5.702038910018395,
+      "minFlatness": 0.020462734426825998,
+      "minHighRatio": 0.5474831000141702
+    }
+  },
+  "lastMic": "Paul’s Powerbeats Pro"
+}
