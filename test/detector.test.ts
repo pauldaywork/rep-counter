@@ -32,6 +32,16 @@ describe("Detector", () => {
     expect(events.map((e) => e.kind)).toEqual(["rep"]);
   });
 
+  it("rejects a breath that passes the gate but never reaches MIN_PEAK_DB", () => {
+    const events = run(frames(quiet(500), exhale(400, -33), quiet(500)));
+    expect(events).toEqual([{ kind: "rejected", t: 920, reason: expect.stringMatching(/^too quiet/) }]);
+  });
+
+  it("counts a soft breath held for SOFT_REP_MIN_MS", () => {
+    const events = run(frames(quiet(500), exhale(1300, -38), quiet(500)));
+    expect(events.map((e) => e.kind)).toEqual(["rep"]);
+  });
+
   it("rejects a grunt as tonal", () => {
     const events = run(frames(quiet(500), { ms: 400, db: -25, flatness: 0.05 }, quiet(500)));
     expect(events).toEqual([{ kind: "rejected", t: 920, reason: expect.stringMatching(/^tonal/) }]);
@@ -63,7 +73,7 @@ describe("Detector", () => {
   });
 
   it("rejects sustained noise as too long, then counts the next exhale", () => {
-    const events = run(frames(quiet(500), exhale(3000), quiet(800), exhale(), quiet(500)));
+    const events = run(frames(quiet(500), exhale(4000), quiet(800), exhale(), quiet(500)));
     expect(events.map((e) => e.kind)).toEqual(["rejected", "rep"]);
     expect(events[0]).toMatchObject({ reason: expect.stringMatching(/^too long/) });
   });

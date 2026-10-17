@@ -18,7 +18,7 @@ export interface DetectorTiming {
   minHeldMs: number;
 }
 
-export const DEFAULT_TIMING: DetectorTiming = { minDurationMs: 150, maxDurationMs: 2000, minGapMs: 600, minHeldMs: 200 };
+export const DEFAULT_TIMING: DetectorTiming = { minDurationMs: 150, maxDurationMs: 3000, minGapMs: 600, minHeldMs: 200 };
 
 /**
  * A clap or a weight's dink spikes and then fades, and its echo can keep it
@@ -26,6 +26,22 @@ export const DEFAULT_TIMING: DetectorTiming = { minDurationMs: 150, maxDurationM
  * a spike drops more than this far below its peak almost at once.
  */
 export const HELD_WINDOW_DB = 10;
+
+/**
+ * The gate follows the background, so in a quiet room it opens for soft
+ * breaths and shuffles. Logged reps peak at -22 dB or louder and those
+ * stray sounds at -27 dB or quieter, so a rep must peak at least this loud,
+ * unless it lasts SOFT_REP_MIN_MS.
+ */
+export const MIN_PEAK_DB = -30;
+
+/**
+ * A softer rep still lasts as long as a loud one: exhales peaking at -36 to
+ * -41 dB fell in step with the loud reps and lasted 1.0 s or more for rows
+ * and 1.3 s or more for hip thrusts, while inhales between reps lasted under
+ * 1.0 s.
+ */
+export const SOFT_REP_MIN_MS = 1000;
 
 export type DetectorEvent =
   | { kind: "rep"; t: number; durationMs: number }
@@ -100,6 +116,7 @@ export class Detector {
     const frameMs = durationMs / this.frameCount;
     const heldMs = this.levels.filter((db) => db >= peakDb - HELD_WINDOW_DB).length * frameMs;
     if (heldMs < minHeldMs) return reject(`spike (near its peak for only ${Math.round(heldMs)} ms)`);
+    if (peakDb < MIN_PEAK_DB && durationMs < SOFT_REP_MIN_MS) return reject(`too quiet (peak ${peakDb.toFixed(0)} dB < ${MIN_PEAK_DB} dB)`);
     if (flatness < minFlatness) return reject(`tonal (flatness ${flatness.toFixed(2)} < ${minFlatness.toFixed(2)})`);
     if (highRatio < minHighRatio) {
       return reject(`low-frequency (high ratio ${highRatio.toFixed(2)} < ${minHighRatio.toFixed(2)})`);

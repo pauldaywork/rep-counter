@@ -18,7 +18,7 @@ describe("buildRecording", () => {
     });
     expect(recording.frames).toEqual([{ t: 21.3, db: -61.23, flatness: 0.5123, highRatio: 0.6543 }]);
     expect(recording.recordedAt).toBe("2026-10-14T05:10:00.000Z");
-    expect(recording.timing).toEqual({ minDurationMs: 150, maxDurationMs: 2000, minGapMs: 600, minHeldMs: 200 });
+    expect(recording.timing).toEqual({ minDurationMs: 150, maxDurationMs: 3000, minGapMs: 600, minHeldMs: 200 });
     expect(isSetRecording(recording)).toBe(true);
   });
 });
