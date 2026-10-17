@@ -225,7 +225,7 @@ describe("/api/routine", () => {
       lastWorkout: "w2",
       workouts: [
         { id: "w1", name: "Legs", activities: [{ name: "Squat", reps: 10, sets: 3 }], restSeconds: 45 },
-        { id: "w2", name: "Arms", activities: [], restSeconds: 60 },
+        { id: "w2", name: "Arms", activities: [], restSeconds: 60, alternateSets: true },
       ],
     };
     expect((await put("/api/routine/workouts", library)).status).toBe(200);
@@ -233,12 +233,13 @@ describe("/api/routine", () => {
     expect(JSON.parse(await readFile(path.join(root, "data-routine", "workouts.json"), "utf8"))).toEqual(library);
   });
 
-  it("rejects workouts with a nameless activity, no sets, a blank name or a repeated id", async () => {
+  it("rejects workouts with a nameless activity, no sets, a blank name, a non-boolean alternate-sets flag or a repeated id", async () => {
     const legs = { id: "w1", name: "Legs", activities: [{ name: "Squat", reps: 10, sets: 3 }], restSeconds: 60 };
     const bad = [
       { workouts: [{ ...legs, activities: [{ name: " ", reps: 10, sets: 3 }] }] },
       { workouts: [{ ...legs, activities: [{ name: "Squat", reps: 10, sets: 0 }] }] },
       { workouts: [{ ...legs, restSeconds: -5 }] },
+      { workouts: [{ ...legs, alternateSets: "yes" }] },
       { workouts: [{ ...legs, name: "" }] },
       { workouts: [legs, { ...legs, name: "Legs again" }] },
     ];

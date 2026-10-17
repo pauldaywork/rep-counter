@@ -10,11 +10,27 @@ export interface WorkoutStep {
   sets: number;
 }
 
-/** Every set of the workout in order: all of the first activity's sets, then the next activity's. */
+/**
+ * Every set of the workout in order: all of the first activity's sets, then the next activity's.
+ * With alternateSets, each pair of activities takes turns a set at a time, then runs the longer one's
+ * leftover sets in a row. An unpaired last activity runs on its own.
+ */
 export function workoutSteps(workout: Workout): WorkoutStep[] {
-  return workout.activities.flatMap((a, activityIndex) =>
-    Array.from({ length: a.sets }, (_, i) => ({ activityIndex, activity: a.name, reps: a.reps, set: i + 1, sets: a.sets })),
-  );
+  const setsOf = (activityIndex: number): WorkoutStep[] => {
+    const a = workout.activities[activityIndex];
+    return Array.from({ length: a.sets }, (_, i) => ({ activityIndex, activity: a.name, reps: a.reps, set: i + 1, sets: a.sets }));
+  };
+  if (!workout.alternateSets) return workout.activities.flatMap((_, i) => setsOf(i));
+  const steps: WorkoutStep[] = [];
+  for (let i = 0; i < workout.activities.length; i += 2) {
+    const first = setsOf(i);
+    const second = i + 1 < workout.activities.length ? setsOf(i + 1) : [];
+    for (let set = 0; set < Math.max(first.length, second.length); set++) {
+      if (set < first.length) steps.push(first[set]);
+      if (set < second.length) steps.push(second[set]);
+    }
+  }
+  return steps;
 }
 
 export function describeStep(step: WorkoutStep): string {

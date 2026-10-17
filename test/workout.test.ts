@@ -31,6 +31,55 @@ describe("workoutSteps", () => {
     ]);
   });
 
+  it("alternates the sets of each pair of activities", () => {
+    const regular = {
+      id: "w",
+      name: "Regular Weights",
+      activities: [
+        { name: "hip thrust", reps: 10, sets: 3 },
+        { name: "rows", reps: 20, sets: 3 },
+        { name: "squats", reps: 20, sets: 3 },
+        { name: "chest press", reps: 10, sets: 3 },
+      ],
+      restSeconds: 60,
+      alternateSets: true,
+    };
+    expect(workoutSteps(regular).map(describeStep)).toEqual([
+      "hip thrust · set 1 of 3 · 10 reps",
+      "rows · set 1 of 3 · 20 reps",
+      "hip thrust · set 2 of 3 · 10 reps",
+      "rows · set 2 of 3 · 20 reps",
+      "hip thrust · set 3 of 3 · 10 reps",
+      "rows · set 3 of 3 · 20 reps",
+      "squats · set 1 of 3 · 20 reps",
+      "chest press · set 1 of 3 · 10 reps",
+      "squats · set 2 of 3 · 20 reps",
+      "chest press · set 2 of 3 · 10 reps",
+      "squats · set 3 of 3 · 20 reps",
+      "chest press · set 3 of 3 · 10 reps",
+    ]);
+  });
+
+  it("runs a pair's leftover sets in a row, and an unpaired last activity on its own", () => {
+    const uneven = {
+      id: "w",
+      name: "Uneven",
+      activities: [
+        { name: "A", reps: 5, sets: 2 },
+        { name: "B", reps: 5, sets: 3 },
+        { name: "C", reps: 5, sets: 2 },
+      ],
+      restSeconds: 60,
+      alternateSets: true,
+    };
+    expect(workoutSteps(uneven).map((s) => `${s.activity}${s.set}`)).toEqual(["A1", "B1", "A2", "B2", "B3", "C1", "C2"]);
+    expect(workoutSteps(uneven).map((s) => s.activityIndex)).toEqual([0, 1, 0, 1, 1, 2, 2]);
+  });
+
+  it("runs activities one after another when alternating is off", () => {
+    expect(workoutSteps({ ...workout, alternateSets: false })).toEqual(workoutSteps(workout));
+  });
+
   it("has no steps for an empty workout", () => {
     expect(workoutSteps({ id: "w", name: "Empty", activities: [], restSeconds: 0 })).toEqual([]);
   });

@@ -23,6 +23,8 @@ export interface Workout {
   activities: Activity[];
   /** the rest between sets; 0 waits for a button press instead */
   restSeconds: number;
+  /** runs each pair of activities a set of one, then a set of the other, until both are done */
+  alternateSets?: boolean;
 }
 
 /** Contents of data-routine/workouts.json: every saved workout, and the one last chosen. */
@@ -74,7 +76,8 @@ export function isWorkout(x: unknown): x is Workout {
     x.name.trim() !== "" &&
     Array.isArray(x.activities) &&
     x.activities.every(isActivity) &&
-    isCount(x.restSeconds)
+    isCount(x.restSeconds) &&
+    (x.alternateSets === undefined || typeof x.alternateSets === "boolean")
   );
 }
 

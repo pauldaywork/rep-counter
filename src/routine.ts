@@ -43,6 +43,7 @@ class RoutinePage {
     reps: el<HTMLInputElement>("activity-reps"),
     sets: el<HTMLInputElement>("activity-sets"),
     rest: el<HTMLInputElement>("rest"),
+    alternateSets: el<HTMLInputElement>("alternate-sets"),
     start: el<HTMLButtonElement>("start"),
     restart: el<HTMLButtonElement>("restart"),
     now: el<HTMLParagraphElement>("now"),
@@ -79,10 +80,14 @@ class RoutinePage {
       if (!Number.isInteger(rest) || rest < 0) {
         app.showError("Enter a rest of 0 seconds or more.");
         this.ui.rest.value = String(this.workout.restSeconds);
+    this.ui.alternateSets.checked = this.workout.alternateSets ?? false;
         return;
       }
       this.update({ ...this.workout, restSeconds: rest });
     });
+    this.ui.alternateSets.addEventListener("change", () =>
+      this.update({ ...this.workout, alternateSets: this.ui.alternateSets.checked }),
+    );
     this.ui.start.addEventListener("click", () => void app.run(() => this.runWorkout()));
     this.ui.restart.addEventListener("click", () => {
       this.progress = null;
