@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { Detector, type DetectorEvent, type Thresholds } from "../src/detector";
 import type { Frame } from "../src/features";
-import { exhale, frames, quiet, type Segment } from "./frames";
+import { exhale, FRAME_MS, frames, quiet, type Segment } from "./frames";
 
 const TH: Thresholds = { onDb: -40, offDb: -50, minFlatness: 0.3, minHighRatio: 0.3 };
+
+/** A sound whose level swings between two values every frame. */
+function jagged(ms: number, a: number, b: number): Segment[] {
+  return Array.from({ length: ms / FRAME_MS }, (_, i) => ({ ms: FRAME_MS, db: i % 2 === 0 ? a : b }));
+}
 
 function run(input: Frame[]): DetectorEvent[] {
   const detector = new Detector(TH);
@@ -40,6 +45,16 @@ describe("Detector", () => {
   it("counts a soft breath held for SOFT_REP_MIN_MS", () => {
     const events = run(frames(quiet(500), exhale(1300, -38), quiet(500)));
     expect(events.map((e) => e.kind)).toEqual(["rep"]);
+  });
+
+  it("counts a long exhale that bursts at the start and then holds far lower", () => {
+    const events = run(frames(quiet(500), { ms: 20, db: -17 }, exhale(1200, -33), quiet(500)));
+    expect(events.map((e) => e.kind)).toEqual(["rep"]);
+  });
+
+  it("rejects a long sound with a brief peak as a spike when it is jagged", () => {
+    const events = run(frames(quiet(500), { ms: 20, db: -17 }, ...jagged(1200, -33, -39), quiet(500)));
+    expect(events).toEqual([expect.objectContaining({ kind: "rejected", reason: expect.stringMatching(/^spike/) })]);
   });
 
   it("rejects a grunt as tonal", () => {

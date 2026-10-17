@@ -43,6 +43,16 @@ export const MIN_PEAK_DB = -30;
  */
 export const SOFT_REP_MIN_MS = 1000;
 
+/**
+ * An exhale's level rises and falls smoothly, while shuffles and clanks
+ * jump about from frame to frame. Jitter is the mean change in level
+ * between frames: logged reps have a median of 1.8 dB and 90% stay under
+ * 2.4 dB, so it is too blunt to judge every sound. It only lets a long,
+ * smooth sound past the spike check: a real exhale scored 2.0 dB and the
+ * setup noises it would also let through 2.2 dB or more.
+ */
+export const SMOOTH_JITTER_DB = 2.2;
+
 export type DetectorEvent =
   | { kind: "rep"; t: number; durationMs: number }
   | { kind: "rejected"; t: number; reason: string };
@@ -115,7 +125,10 @@ export class Detector {
     const peakDb = Math.max(...this.levels);
     const frameMs = durationMs / this.frameCount;
     const heldMs = this.levels.filter((db) => db >= peakDb - HELD_WINDOW_DB).length * frameMs;
-    if (heldMs < minHeldMs) return reject(`spike (near its peak for only ${Math.round(heldMs)} ms)`);
+    const jitter = meanStep(this.levels);
+    // A long, smooth exhale can burst at the start and then hold well below that peak.
+    const smoothBreath = durationMs >= SOFT_REP_MIN_MS && jitter < SMOOTH_JITTER_DB;
+    if (heldMs < minHeldMs && !smoothBreath) return reject(`spike (near its peak for only ${Math.round(heldMs)} ms)`);
     if (peakDb < MIN_PEAK_DB && durationMs < SOFT_REP_MIN_MS) return reject(`too quiet (peak ${peakDb.toFixed(0)} dB < ${MIN_PEAK_DB} dB)`);
     if (flatness < minFlatness) return reject(`tonal (flatness ${flatness.toFixed(2)} < ${minFlatness.toFixed(2)})`);
     if (highRatio < minHighRatio) {
@@ -127,4 +140,11 @@ export class Detector {
     this.lastRepT = endT;
     return { kind: "rep", t: endT, durationMs };
   }
+}
+
+/** The mean change in level from one frame to the next. */
+function meanStep(levels: number[]): number {
+  let sum = 0;
+  for (let i = 1; i < levels.length; i++) sum += Math.abs(levels[i] - levels[i - 1]);
+  return levels.length > 1 ? sum / (levels.length - 1) : 0;
 }
