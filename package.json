@@ -7,7 +7,8 @@
     "dev": "vite",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "report": "node scripts/report.ts"
+    "report": "node scripts/report.ts",
+    "experiment": "EXPERIMENT=1 vitest run test/experiments --silent=false"
   },
   "dependencies": {
     "fft.js": "4.0.4"
