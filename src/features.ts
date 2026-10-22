@@ -1,4 +1,5 @@
 import FFT from "fft.js";
+import { dctMatrix, MEL_BANDS, MFCC_COUNT, melFilterBank, mfccFrom } from "./mfcc";
 
 /** Features of one ~21 ms slice of mic audio. */
 export interface Frame {
@@ -10,6 +11,8 @@ export interface Frame {
   flatness: number;
   /** share of in-band energy at or above HIGH_SPLIT_HZ, 0..1 */
   highRatio: number;
+  /** MFCCs 1..19 over BAND_LOW_HZ..BAND_HIGH_HZ; logged for a future classifier, not used to count. Older logs lack it. */
+  mfcc?: number[];
 }
 
 // A narrowband Bluetooth headset (8 kHz sampling) delivers nothing above
@@ -61,6 +64,8 @@ export class FeatureExtractor {
   private readonly windowed: number[];
   private readonly spectrum: number[];
   private readonly power: Float64Array;
+  private readonly melFilters: Float64Array[];
+  private readonly dct: Float64Array[];
   private filled = 0;
   private samplesSeen = 0;
 
@@ -73,6 +78,8 @@ export class FeatureExtractor {
     this.windowed = new Array<number>(n).fill(0);
     this.spectrum = this.fft.createComplexArray();
     this.power = new Float64Array(n / 2 + 1);
+    this.melFilters = melFilterBank(n / 2 + 1, sampleRate / n, BAND_LOW_HZ, Math.min(BAND_HIGH_HZ, sampleRate / 2));
+    this.dct = dctMatrix(MEL_BANDS, MFCC_COUNT);
   }
 
   push(block: ArrayLike<number>): Frame[] {
@@ -98,6 +105,12 @@ export class FeatureExtractor {
       this.power[k] = re * re + im * im;
     }
     const { flatness, highRatio } = spectralFeatures(this.power, this.sampleRate / n);
-    return { t: (this.samplesSeen / this.sampleRate) * 1000, db: rmsDb(this.buffer), flatness, highRatio };
+    return {
+      t: (this.samplesSeen / this.sampleRate) * 1000,
+      db: rmsDb(this.buffer),
+      flatness,
+      highRatio,
+      mfcc: mfccFrom(this.power, this.melFilters, this.dct),
+    };
   }
 }
