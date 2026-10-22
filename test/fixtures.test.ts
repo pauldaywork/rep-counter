@@ -16,6 +16,7 @@ const UNSURE = new Set([
   "set-2026-10-17T08-13-31-060Z.json",
   "set-2026-10-17T08-13-32-766Z.json",
   "set-2026-10-17T08-13-36-636Z.json",
+  "set-2026-10-21T05-03-25-921Z.json",
 ]);
 
 /**
@@ -25,6 +26,11 @@ const UNSURE = new Set([
 const KNOWN_WRONG: Record<string, string> = {
   "set-2026-10-17T08-29-11-576Z.json": "counts setup breaths before the rows start",
   "set-2026-10-17T08-30-47-670Z.json": "counts a setup breath before the hip thrusts start",
+  "set-2026-10-21T05-19-16-393Z.json": "rejects a soft, short rep as a spike, near its peak for 192 ms",
+  "set-2026-10-21T05-21-30-350Z.json": "misses a rep, perhaps among the noise before the reps start",
+  "set-2026-10-21T05-25-12-424Z.json": "misses a rep: a quiet one under 1 s, or a long one rejected as low-frequency",
+  "set-2026-10-21T05-27-24-675Z.json": "counts a setup noise and misses a quiet rep under 1 s and one more",
+  "set-2026-10-21T05-35-31-989Z.json": "counts two short setup noises around the first rep",
 };
 
 function check(file: URL): void {

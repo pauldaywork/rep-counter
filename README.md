@@ -42,9 +42,13 @@ page and in the logs.
 | Too short | lasts at least 150 ms | clicks, clanks |
 | Spike | stays within 10 dB of its own peak for at least 200 ms, unless it lasts 1 s or more and is smooth (level changes by under 2.2 dB per frame on average) | claps and weight dinks that spike and fade |
 | Too quiet | peaks at -30 dB or louder, unless it lasts 1 s or more | soft shuffles and inhales the gate lets in when the room is quiet |
-| Tonal | average flatness at least the calibrated minimum | grunts, hums |
+| Tonal | average flatness at least the calibrated minimum, or 0.02 if that is lower | grunts, hums |
 | Low-frequency | average high ratio at least the calibrated minimum | thuds |
 | Too soon | starts at least 600 ms after the last rep ended | the tail of the same breath |
+
+The flatness cap is there because reps get less hissy as a set goes on. A
+calibration from three fresh breaths can set a minimum that late reps fall
+below, while grunts and hums sit at 0.01 or less.
 
 The -30 dB cutoff is an absolute level, chosen for the Powerbeats Pro, so
 another microphone may need a different value.

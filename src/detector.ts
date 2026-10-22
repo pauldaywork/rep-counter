@@ -53,6 +53,14 @@ export const SOFT_REP_MIN_MS = 1000;
  */
 export const SMOOTH_JITTER_DB = 2.2;
 
+/**
+ * Calibration sets minFlatness from three fresh breaths, but reps get less
+ * hissy as a set wears on: late reps averaged 0.04 to 0.08, and a noisy
+ * calibration once set the minimum at 0.10, rejecting half a set. Logged
+ * grunts and hums average 0.01 or less, so the minimum never goes above this.
+ */
+export const MAX_MIN_FLATNESS = 0.02;
+
 export type DetectorEvent =
   | { kind: "rep"; t: number; durationMs: number }
   | { kind: "rejected"; t: number; reason: string };
@@ -117,7 +125,8 @@ export class Detector {
     const durationMs = endT - this.startT;
     const flatness = this.flatnessSum / this.frameCount;
     const highRatio = this.highRatioSum / this.frameCount;
-    const { minFlatness, minHighRatio } = this.thresholds;
+    const minFlatness = Math.min(this.thresholds.minFlatness, MAX_MIN_FLATNESS);
+    const { minHighRatio } = this.thresholds;
     const { minDurationMs, minGapMs, minHeldMs } = this.timing;
     const reject = (reason: string): DetectorEvent => ({ kind: "rejected", t: endT, reason });
 

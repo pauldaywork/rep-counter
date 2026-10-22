@@ -58,8 +58,15 @@ describe("Detector", () => {
   });
 
   it("rejects a grunt as tonal", () => {
-    const events = run(frames(quiet(500), { ms: 400, db: -25, flatness: 0.05 }, quiet(500)));
+    // Logged grunts and hums average a flatness of 0.01 or less.
+    const events = run(frames(quiet(500), { ms: 400, db: -25, flatness: 0.005 }, quiet(500)));
     expect(events).toEqual([{ kind: "rejected", t: 920, reason: expect.stringMatching(/^tonal/) }]);
+  });
+
+  it("counts a tired exhale a strict calibration would call tonal", () => {
+    // Late reps in a set averaged a flatness of 0.04, below a calibrated 0.3.
+    const events = run(frames(quiet(500), { ms: 400, db: -25, flatness: 0.04 }, quiet(500)));
+    expect(events.map((e) => e.kind)).toEqual(["rep"]);
   });
 
   it("rejects a thud as low-frequency", () => {
