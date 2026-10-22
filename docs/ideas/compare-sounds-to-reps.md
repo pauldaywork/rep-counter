@@ -1,7 +1,8 @@
 # Idea: compare each sound to the user's own reps
 
-Status: tried on 2026-10-17's data and not built. Come back to it once more
-workouts are logged with their actual counts entered.
+Status: tried on 2026-10-17's data, checked again on 2026-10-22, and not
+built. Come back to it once more workouts are logged with their actual
+counts entered.
 
 ## The problem it would solve
 
@@ -59,6 +60,31 @@ was scored against the same activity's reps in the other sets.
 
 Conclusion at the time: not worth building. The − button on the page is the
 fix for setup breaths for now.
+
+## Short setup noises (2026-10-22)
+
+Three more setup noises were counted on 2026-10-21, all on the Powerbeats
+Pro in single sets: set `2026-10-21T05-25-24-624Z` at 8.1 s, and set
+`2026-10-21T05-34-29-105Z` at 8.0 s and 11.6 s. The experiment now also
+reads `data/logs/sets/`, grouping each mic's single sets as one activity
+since they have none, and these are in `SETUP`. Without loudness they
+score above 99%, 97% and 98% of that group's reps.
+
+- They are short and quiet: 299 to 384 ms long, peaking at -24 to -27 dB,
+  with a mean level of -28 to -31 dB. They were the three shortest of the
+  203 counted sounds in the fixtures, while the shortest real rep in a
+  fixture was 555 ms.
+- But replaying all the logs turned up loud sounds of 360 to 500 ms mid-set
+  that look like real quick reps, so length alone can't separate them.
+- A rule that a sound under 500 ms must peak at -23 dB or louder would fix
+  the 05-35 fixture, but it rests on three examples from one Powerbeats
+  session, with about 2.5 dB of margin.
+- On the BY-V Analog Stereo mic real reps peak quieter, down to about
+  -24 dB, so an absolute level doesn't carry over between mics. Level
+  relative to the gate doesn't separate them either. No setup noises were
+  counted in the BY-V sets with an entered count.
+
+Conclusion: still not built. Wait for more examples across mics.
 
 ## Coming back to it
 

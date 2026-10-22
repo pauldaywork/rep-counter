@@ -1,18 +1,21 @@
-// Scores every sound in the routine logs against a template of the same
+// Scores every sound in the set logs against a template of the same
 // activity's reps from the other sets, to see whether known setup breaths
-// stand out from real reps. See docs/ideas/compare-sounds-to-reps.md.
+// stand out from real reps. Single-set logs have no activity, so each mic's
+// single sets are grouped as one. See docs/ideas/compare-sounds-to-reps.md.
 // Run with `npm run experiment`; plain `npm test` skips it.
 import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { it } from "vitest";
 import { DEFAULT_TIMING, Detector } from "../../src/detector";
 
-const ROOT = fileURLToPath(new URL("../../data-routine/logs/sets/", import.meta.url));
+const ROOTS = ["../../data-routine/logs/sets/", "../../data/logs/sets/"].map((dir) => fileURLToPath(new URL(dir, import.meta.url)));
 
 /** Counted sounds known to be setup breaths, by set id and end time in seconds. Add new ones here. */
 const SETUP: Record<string, number[]> = {
   "2026-10-17T08-27-52-484Z": [7.6, 11.1],
   "2026-10-17T08-29-32-980Z": [12.7],
+  "2026-10-21T05-25-24-624Z": [8.1],
+  "2026-10-21T05-34-29-105Z": [8.0, 11.6],
 };
 
 type F = { t: number; db: number; flatness: number; highRatio: number };
@@ -36,8 +39,9 @@ function features(buf: F[]): { f: Record<string, number>; env: number[] } {
   };
 }
 
-function soundsOf(file: string): Sound[] {
-  const j = JSON.parse(readFileSync(ROOT + file, "utf8"));
+function soundsOf(root: string, file: string): Sound[] {
+  const j = JSON.parse(readFileSync(root + file, "utf8"));
+  const activity: string = j.routine?.activity ?? `single sets, ${j.mic}`;
   const set = file.replace(".json", "");
   const { onDb, offDb } = j.thresholds;
   const det = new Detector(j.thresholds, DEFAULT_TIMING);
@@ -54,7 +58,7 @@ function soundsOf(file: string): Sound[] {
     const end = Math.round(ev.t / 100) / 10;
     const setup = (SETUP[set] ?? []).some((t) => Math.abs(t - end) < 0.15);
     const { f, env } = features(buf);
-    out.push({ set, activity: j.routine.activity, end, kind: ev.kind, reason: ev.kind === "rep" ? "" : ev.reason.split(" (")[0], f, env, label: setup ? "SETUP" : ev.kind === "rep" ? "rep" : "rejected" });
+    out.push({ set, activity, end, kind: ev.kind, reason: ev.kind === "rep" ? "" : ev.reason.split(" (")[0], f, env, label: setup ? "SETUP" : ev.kind === "rep" ? "rep" : "rejected" });
     buf = [];
   }
   return out;
@@ -106,7 +110,7 @@ function report(all: Sound[], keys: string[]): string {
 }
 
 it.runIf(process.env.EXPERIMENT)("rep template", () => {
-  const all = readdirSync(ROOT).filter((n) => n.endsWith(".json")).sort().flatMap(soundsOf);
+  const all = ROOTS.flatMap((root) => readdirSync(root).filter((n) => n.endsWith(".json")).sort().flatMap((n) => soundsOf(root, n)));
   console.log(
     "#### Scoring with loudness\n" + report(all, ALL_KEYS) +
       "\n#### Scoring without loudness\n" + report(all, ALL_KEYS.filter((k) => k !== "peak")),
