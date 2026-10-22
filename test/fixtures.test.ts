@@ -31,6 +31,7 @@ const KNOWN_WRONG: Record<string, string> = {
   "set-2026-10-21T05-25-12-424Z.json": "misses a rep: a quiet one under 1 s, or a long one rejected as low-frequency",
   "set-2026-10-21T05-27-24-675Z.json": "counts a setup noise and misses a quiet rep under 1 s and one more",
   "set-2026-10-21T05-35-31-989Z.json": "counts two short setup noises around the first rep",
+  "set-2026-10-22T05-52-04-736Z.json": "loud low-pitched noise for most of the set buries the reps",
 };
 
 function check(file: URL): void {
