@@ -7,7 +7,15 @@
       "offOffsetDb": 8.922505420207768,
       "minFlatness": 0.0969950163593624,
       "minHighRatio": 0.4128762448070253
+    },
+    "BY-V Analog Stereo": {
+      "calibratedAt": "2026-10-22T05:17:33.174Z",
+      "noiseFloorDb": -47.56735973704686,
+      "onOffsetDb": 12.145590775314059,
+      "offOffsetDb": 7.287354465188435,
+      "minFlatness": 0.25778034726003046,
+      "minHighRatio": 0.5530161138615959
     }
   },
-  "lastMic": "Paul’s Powerbeats Pro"
+  "lastMic": "BY-V Analog Stereo"
 }
