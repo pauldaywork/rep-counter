@@ -125,7 +125,15 @@ function isTiming(x: unknown): x is DetectorTiming {
 }
 
 function isFrame(x: unknown): x is Frame {
-  return isRecord(x) && isNumber(x.t) && isNumber(x.db) && isNumber(x.flatness) && isNumber(x.highRatio);
+  // mfcc was added later, so frames saved before it lack it.
+  return (
+    isRecord(x) &&
+    isNumber(x.t) &&
+    isNumber(x.db) &&
+    isNumber(x.flatness) &&
+    isNumber(x.highRatio) &&
+    (x.mfcc === undefined || (Array.isArray(x.mfcc) && x.mfcc.every(isNumber)))
+  );
 }
 
 const isFrames = (x: unknown): x is Frame[] => Array.isArray(x) && x.every(isFrame);

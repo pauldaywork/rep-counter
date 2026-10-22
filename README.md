@@ -10,6 +10,12 @@ over 100 Hz to 4 kHz, since a Bluetooth headset sends nothing higher:
 - **high ratio** (`highRatio`): the share of the sound's energy above 1 kHz;
   breath is hissy, a thud is low
 
+Each frame also carries 19 MFCCs (`mfcc`) over the same band: the shape of
+its spectrum on 40 mel bands, without the overall level. They don't affect
+the count. They are logged to train and check a classifier that tells reps
+from other sounds; see `docs/ideas/compare-sounds-to-reps.md`. Logs and
+fixtures from before 22 October 2026 don't have them.
+
 ## Calibration
 
 Calibration takes a few seconds of quiet, then three exhales, per microphone:

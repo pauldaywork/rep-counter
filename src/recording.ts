@@ -44,6 +44,7 @@ export function roundFrames(frames: Frame[]): Frame[] {
     db: round(f.db, 2),
     flatness: round(f.flatness, 4),
     highRatio: round(f.highRatio, 4),
+    ...(f.mfcc && { mfcc: f.mfcc.map((c) => round(c, 2)) }),
   }));
 }
 
