@@ -35,7 +35,7 @@ import type { StoreFile } from "./store-schema";
 const CALIBRATION_QUIET_MS = 3000 + WARMUP_MS;
 const SET_QUIET_MS = 2000 + WARMUP_MS;
 const NO_FRAME_TIMEOUT_MS = 3000;
-const EXHALE_TIMEOUT_MS = 10_000;
+const EXHALE_TIMEOUT_MS = 30_000;
 const REJECTIONS_SHOWN = 8;
 // Chrome on Linux doesn't fire devicechange when PipeWire adds a mic, e.g.
 // a Bluetooth headset switching to headset (HFP) mode, so poll as well.

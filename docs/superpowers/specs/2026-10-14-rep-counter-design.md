@@ -114,7 +114,7 @@ Flow, run once per microphone:
    Segments shorter than 150 ms are dropped, and if more than 3
    remain, the 3 loudest are kept. For each, record its peak dB, mean
    flatness and mean highRatio. The phase ends 600 ms after the third
-   exhale ends, or after 10 s.
+   exhale ends, or after 30 s.
 3. **Derive:**
    - `span = min(exhale peak dB) − noiseFloorDb`
    - if fewer than 3 exhales were found → fail and ask the user to
