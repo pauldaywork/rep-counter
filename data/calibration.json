@@ -9,12 +9,12 @@
       "minHighRatio": 0.4128762448070253
     },
     "BY-V Analog Stereo": {
-      "calibratedAt": "2026-10-22T05:17:33.174Z",
-      "noiseFloorDb": -47.56735973704686,
-      "onOffsetDb": 12.145590775314059,
-      "offOffsetDb": 7.287354465188435,
-      "minFlatness": 0.25778034726003046,
-      "minHighRatio": 0.5530161138615959
+      "calibratedAt": "2026-10-24T02:06:07.383Z",
+      "noiseFloorDb": -42.526425832162815,
+      "onOffsetDb": 11.033950253548987,
+      "offOffsetDb": 6.620370152129392,
+      "minFlatness": 0.24939830033427798,
+      "minHighRatio": 0.5146954044078509
     }
   },
   "lastMic": "BY-V Analog Stereo"
