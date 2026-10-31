@@ -43,6 +43,8 @@ export interface WorkoutKind<A extends ActivityBase> {
   runSet(step: Step<A>, run: { runId: string; workout: string }): Promise<void>;
   /** Ends the running set early, for End workout. */
   stopSet(): void;
+  /** Dings when a rest runs out. The simple page dings as each set starts instead. */
+  dingAfterRest: boolean;
 }
 
 /** How far through the workout a run has got, kept after an error so it can resume. */
@@ -67,6 +69,8 @@ function pageElements(amountField: string) {
     sets: el<HTMLInputElement>("activity-sets"),
     rest: el<HTMLInputElement>("rest"),
     alternateSets: el<HTMLInputElement>("alternate-sets"),
+    // Only the simple page has a start delay.
+    startDelay: document.getElementById("start-delay") as HTMLInputElement | null,
     start: el<HTMLButtonElement>("start"),
     restart: el<HTMLButtonElement>("restart"),
     now: el<HTMLParagraphElement>("now"),
@@ -119,6 +123,16 @@ export class WorkoutPage<A extends ActivityBase> {
         return;
       }
       this.update({ ...this.workout, restSeconds: rest });
+    });
+    this.ui.startDelay?.addEventListener("change", () => {
+      const field = this.ui.startDelay!;
+      const delay = Number(field.value);
+      if (!Number.isInteger(delay) || delay < 0) {
+        this.host.showError("Enter a wait of 0 seconds or more.");
+        field.value = String(this.workout.startDelaySeconds ?? 0);
+        return;
+      }
+      this.update({ ...this.workout, startDelaySeconds: delay });
     });
     this.ui.alternateSets.addEventListener("change", () =>
       this.update({ ...this.workout, alternateSets: this.ui.alternateSets.checked }),
@@ -250,6 +264,7 @@ export class WorkoutPage<A extends ActivityBase> {
     this.endRequested = false;
     this.ui.workoutControls.hidden = false;
     try {
+      await this.wait(workout.startDelaySeconds ?? 0);
       while (progress.step < steps.length && !this.endRequested) {
         const step = steps[progress.step];
         this.ui.now.textContent = this.kind.describeStep(step);
@@ -275,6 +290,18 @@ export class WorkoutPage<A extends ActivityBase> {
     }
   }
 
+  /** Counts down the wait before the first set. Start now ends it early. */
+  private async wait(seconds: number): Promise<void> {
+    if (seconds === 0) return;
+    this.ui.skipRest.textContent = "Start now";
+    this.ui.skipRest.hidden = false;
+    const timer = countdown(seconds, (left) => this.host.setStatus(`Starting in ${left} s`));
+    this.endRest = timer.stop;
+    await timer.finished;
+    this.endRest = null;
+    this.ui.skipRest.hidden = true;
+  }
+
   /** Counts down the rest before `next` and dings when it's over, or with no rest set, waits for Start next set. */
   private async rest(next: Step<A>, seconds: number): Promise<void> {
     this.ui.now.textContent = `Next: ${this.kind.describeStep(next)}`;
@@ -293,7 +320,7 @@ export class WorkoutPage<A extends ActivityBase> {
     const timeUp = await finished;
     this.endRest = null;
     this.ui.skipRest.hidden = true;
-    if (timeUp) playDing();
+    if (timeUp && this.kind.dingAfterRest) playDing();
   }
 
   // ---- rendering ----
@@ -304,6 +331,7 @@ export class WorkoutPage<A extends ActivityBase> {
     this.ui.workoutName.value = this.workout.name;
     this.ui.rest.value = String(this.workout.restSeconds);
     this.ui.alternateSets.checked = this.workout.alternateSets ?? false;
+    if (this.ui.startDelay) this.ui.startDelay.value = String(this.workout.startDelaySeconds ?? 0);
     const steps = workoutSteps(this.workout);
     const done = this.progress?.step ?? 0;
     const current = this.running ? steps[done]?.activityIndex : undefined;

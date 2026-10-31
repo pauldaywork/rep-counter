@@ -72,6 +72,8 @@ void new WorkoutPage<TimedActivity>(host, {
       timeLeft.textContent = String(left);
     });
     stopTimer = timer.stop;
+    // The cue to start, after the wait, a rest or Skip rest alike.
+    playDing();
     host.setStatus("Go!");
     const timeUp = await timer.finished;
     stopTimer = null;
@@ -83,4 +85,5 @@ void new WorkoutPage<TimedActivity>(host, {
     }
   },
   stopSet: () => stopTimer?.(),
+  dingAfterRest: false,
 }).init();

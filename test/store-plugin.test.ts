@@ -266,6 +266,7 @@ describe("/api/simple", () => {
     activities: [{ name: "hip thrust", seconds: 60, sets: 3 }],
     restSeconds: 30,
     alternateSets: true,
+    startDelaySeconds: 10,
   };
 
   it("returns no workouts when none are saved, then saves and loads timed workouts in data-simple", async () => {
@@ -276,6 +277,12 @@ describe("/api/simple", () => {
     expect(JSON.parse(await readFile(path.join(root, "data-simple", "workouts.json"), "utf8"))).toEqual(library);
     expect(await readdir(path.join(root, "data-simple"))).toEqual(["workouts.json"]);
     await expect(readdir(path.join(root, "data-routine"))).rejects.toThrow();
+  });
+
+  it("rejects a start delay that isn't a whole number of seconds, 0 or more", async () => {
+    for (const startDelaySeconds of [-5, 2.5, "10"]) {
+      expect((await put("/api/simple/workouts", { workouts: [{ ...glutes, startDelaySeconds }] })).status).toBe(400);
+    }
   });
 
   it("rejects activities that count reps, or have no whole positive seconds, sets or name", async () => {

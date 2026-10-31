@@ -276,6 +276,7 @@ input:disabled {
 #activity-reps,
 #activity-seconds,
 #activity-sets,
-#rest {
+#rest,
+#start-delay {
   width: 6em;
 }

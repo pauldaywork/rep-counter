@@ -34,6 +34,8 @@ export interface Workout<A extends ActivityBase = Activity> {
   restSeconds: number;
   /** runs each pair of activities a set of one, then a set of the other, until both are done */
   alternateSets?: boolean;
+  /** the wait after Start before the first set, so there's time to get in place; missing means none */
+  startDelaySeconds?: number;
 }
 
 /**
@@ -98,7 +100,8 @@ function workoutCheck<A extends ActivityBase>(activityCheck: (x: unknown) => x i
     Array.isArray(x.activities) &&
     x.activities.every(activityCheck) &&
     isCount(x.restSeconds) &&
-    (x.alternateSets === undefined || typeof x.alternateSets === "boolean");
+    (x.alternateSets === undefined || typeof x.alternateSets === "boolean") &&
+    (x.startDelaySeconds === undefined || isCount(x.startDelaySeconds));
 }
 
 /** A check for a library of workouts that pass `workoutCheck`, with no id used twice. */

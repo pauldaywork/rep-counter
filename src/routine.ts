@@ -25,5 +25,6 @@ void new WorkoutPage<Activity>(app, {
     });
   },
   stopSet: () => app.stopSet(),
+  dingAfterRest: true,
 }).init();
 void app.init();
