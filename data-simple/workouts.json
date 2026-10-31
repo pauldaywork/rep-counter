@@ -1,0 +1,33 @@
+{
+  "lastWorkout": "e8390ee2-44da-4961-93e4-3aa77c0c990c",
+  "workouts": [
+    {
+      "id": "e8390ee2-44da-4961-93e4-3aa77c0c990c",
+      "name": "Basic Core",
+      "activities": [
+        {
+          "name": "Crunches",
+          "seconds": 30,
+          "sets": 2
+        },
+        {
+          "name": "Leg Lifts",
+          "seconds": 30,
+          "sets": 2
+        },
+        {
+          "name": "Planks",
+          "seconds": 60,
+          "sets": 2
+        },
+        {
+          "name": "Crunches",
+          "seconds": 30,
+          "sets": 2
+        }
+      ],
+      "restSeconds": 10,
+      "startDelaySeconds": 10
+    }
+  ]
+}
