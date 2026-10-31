@@ -17,6 +17,7 @@ const UNSURE = new Set([
   "set-2026-10-17T08-13-32-766Z.json",
   "set-2026-10-17T08-13-36-636Z.json",
   "set-2026-10-21T05-03-25-921Z.json",
+  "set-2026-10-27T06-50-27-318Z.json",
 ]);
 
 /**
@@ -36,7 +37,6 @@ const KNOWN_WRONG: Record<string, string> = {
   "set-2026-10-27T06-13-01-779Z.json": "counts 10 of 11 reps; not looked into yet",
   "set-2026-10-27T06-41-34-782Z.json": "counts 15 of 14 reps; not looked into yet",
   "set-2026-10-27T06-46-26-709Z.json": "counts 15 of 16 reps; not looked into yet",
-  "set-2026-10-27T06-50-27-318Z.json": "counts 15 of 19 reps; not looked into yet",
   "set-2026-10-29T05-31-34-778Z.json": "counts 15 of 14 reps; not looked into yet",
   "set-2026-10-31T04-51-50-462Z.json": "counts 15 of 14 reps; not looked into yet",
 };
