@@ -1,6 +1,7 @@
 import "./style.css";
 import { createStore } from "./store";
-import { App, el } from "./ui";
+import { el } from "./dom";
+import { App } from "./ui";
 
 const app = new App(createStore());
 const target = el<HTMLInputElement>("target");

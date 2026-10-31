@@ -54,3 +54,10 @@ export function createDinger(): Dinger {
     close: () => context.close(),
   };
 }
+
+/** One ding on its own short-lived AudioContext, as a cue such as the end of a rest. */
+export function playDing(): void {
+  const dinger = createDinger();
+  dinger.ding();
+  setTimeout(() => void dinger.close().catch(() => {}), 500);
+}
