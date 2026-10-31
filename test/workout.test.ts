@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest";
 import {
   createWorkout,
   deleteWorkout,
+  describeActivity,
   describeStep,
+  describeTimedActivity,
+  describeTimedStep,
   moveActivity,
   nameTaken,
   parseActivity,
+  parseTimedActivity,
   replaceWorkout,
   selectedWorkout,
   setsDone,
@@ -91,6 +95,11 @@ it("describes a step", () => {
   expect(describeStep(last)).toBe("Push-up · set 1 of 1 · 1 rep");
 });
 
+it("describes an activity", () => {
+  expect(describeActivity({ name: "Squat", reps: 10, sets: 3 })).toBe("3 × 10 reps");
+  expect(describeActivity({ name: "Push-up", reps: 1, sets: 2 })).toBe("2 × 1 rep");
+});
+
 it("counts an activity's finished sets", () => {
   const steps = workoutSteps(workout);
   expect(setsDone(steps, 1, 0)).toBe(1);
@@ -153,5 +162,52 @@ describe("the workout library", () => {
     expect(deleteWorkout(library, "w2")).toEqual({ lastWorkout: "w3", workouts: [workout, core] });
     expect(deleteWorkout(library, "w3")).toEqual({ lastWorkout: "w2", workouts: [workout, arms] });
     expect(deleteWorkout({ workouts: [arms] }, "w2")).toEqual({ lastWorkout: undefined, workouts: [] });
+  });
+});
+
+describe("timed workouts", () => {
+  const glutes = {
+    id: "t1",
+    name: "Glutes",
+    activities: [
+      { name: "hip thrust", seconds: 60, sets: 2 },
+      { name: "plank", seconds: 30, sets: 1 },
+    ],
+    restSeconds: 30,
+  };
+
+  it("runs the sets in the same order as counted workouts, with each set's seconds", () => {
+    expect(workoutSteps(glutes)).toEqual([
+      { activityIndex: 0, activity: "hip thrust", seconds: 60, set: 1, sets: 2 },
+      { activityIndex: 0, activity: "hip thrust", seconds: 60, set: 2, sets: 2 },
+      { activityIndex: 1, activity: "plank", seconds: 30, set: 1, sets: 1 },
+    ]);
+    expect(workoutSteps({ ...glutes, alternateSets: true }).map(describeTimedStep)).toEqual([
+      "hip thrust · set 1 of 2 · 60 s",
+      "plank · set 1 of 1 · 30 s",
+      "hip thrust · set 2 of 2 · 60 s",
+    ]);
+  });
+
+  it("describes a timed activity", () => {
+    expect(describeTimedActivity(glutes.activities[0])).toBe("2 × 60 s");
+  });
+
+  it("reads the add-activity fields with seconds instead of reps", () => {
+    expect(parseTimedActivity(" hip thrust ", "60", "3")).toEqual({ name: "hip thrust", seconds: 60, sets: 3 });
+    expect(parseTimedActivity("", "60", "3")).toBe("Enter the activity's name.");
+    expect(parseTimedActivity("plank", "0", "3")).toBe("Enter at least 1 second per set.");
+    expect(parseTimedActivity("plank", "", "3")).toBe("Enter at least 1 second per set.");
+    expect(parseTimedActivity("plank", "7.5", "3")).toBe("Enter at least 1 second per set.");
+    expect(parseTimedActivity("plank", "30", "0")).toBe("Enter at least 1 set.");
+  });
+
+  it("builds, reorders and replaces timed workouts in a library", () => {
+    const library = { lastWorkout: "t1", workouts: [glutes] };
+    expect(createWorkout(library, "t2")).toEqual({ id: "t2", name: "Workout 1", activities: [], restSeconds: 60 });
+    const reordered = moveActivity(glutes, 1, 0);
+    expect(reordered.activities.map((a) => a.name)).toEqual(["plank", "hip thrust"]);
+    expect(replaceWorkout(library, reordered).workouts).toEqual([reordered]);
+    expect(selectedWorkout(library)).toBe(glutes);
   });
 });
