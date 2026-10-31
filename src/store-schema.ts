@@ -9,29 +9,44 @@ export interface StoreFile {
   mics: Record<string, Calibration>;
 }
 
-/** One exercise in a workout: `sets` sets of `reps` reps each. */
-export interface Activity {
+/** What every kind of activity has: a name and how many sets to do. */
+export interface ActivityBase {
   name: string;
-  reps: number;
   sets: number;
 }
 
-/** A named list of activities, run set by set on the routine page. */
-export interface Workout {
+/** One exercise in a routine-page workout: `sets` sets of `reps` reps each. */
+export interface Activity extends ActivityBase {
+  reps: number;
+}
+
+/** One exercise in a simple-page workout: `sets` sets of `seconds` seconds each. */
+export interface TimedActivity extends ActivityBase {
+  seconds: number;
+}
+
+/** A named list of activities, run set by set. */
+export interface Workout<A extends ActivityBase = Activity> {
   id: string;
   name: string;
-  activities: Activity[];
+  activities: A[];
   /** the rest between sets; 0 waits for a button press instead */
   restSeconds: number;
   /** runs each pair of activities a set of one, then a set of the other, until both are done */
   alternateSets?: boolean;
 }
 
-/** Contents of data-routine/workouts.json: every saved workout, and the one last chosen. */
-export interface WorkoutLibrary {
+/**
+ * Every saved workout, and the one last chosen: data-routine/workouts.json,
+ * or data-simple/workouts.json for timed workouts.
+ */
+export interface WorkoutLibrary<A extends ActivityBase = Activity> {
   lastWorkout?: string;
-  workouts: Workout[];
+  workouts: Workout<A>[];
 }
+
+export type TimedWorkout = Workout<TimedActivity>;
+export type TimedWorkoutLibrary = WorkoutLibrary<TimedActivity>;
 
 /** One set's audio features, saved to test/fixtures for regression tests. */
 export interface SetRecording {
@@ -63,31 +78,43 @@ export function isCalibration(x: unknown): x is Calibration {
 
 const isPositiveCount = (x: unknown): x is number => Number.isInteger(x) && (x as number) >= 1;
 
+const hasName = (x: Record<string, unknown>) => typeof x.name === "string" && x.name.trim() !== "";
+
 function isActivity(x: unknown): x is Activity {
-  return isRecord(x) && typeof x.name === "string" && x.name.trim() !== "" && isPositiveCount(x.reps) && isPositiveCount(x.sets);
+  return isRecord(x) && hasName(x) && isPositiveCount(x.reps) && isPositiveCount(x.sets);
 }
 
-export function isWorkout(x: unknown): x is Workout {
-  return (
+function isTimedActivity(x: unknown): x is TimedActivity {
+  return isRecord(x) && hasName(x) && isPositiveCount(x.seconds) && isPositiveCount(x.sets);
+}
+
+/** A check for workouts whose activities all pass `activityCheck`. */
+function workoutCheck<A extends ActivityBase>(activityCheck: (x: unknown) => x is A) {
+  return (x: unknown): x is Workout<A> =>
     isRecord(x) &&
     typeof x.id === "string" &&
     x.id !== "" &&
-    typeof x.name === "string" &&
-    x.name.trim() !== "" &&
+    hasName(x) &&
     Array.isArray(x.activities) &&
-    x.activities.every(isActivity) &&
+    x.activities.every(activityCheck) &&
     isCount(x.restSeconds) &&
-    (x.alternateSets === undefined || typeof x.alternateSets === "boolean")
-  );
+    (x.alternateSets === undefined || typeof x.alternateSets === "boolean");
 }
 
-export function isWorkoutLibrary(x: unknown): x is WorkoutLibrary {
-  if (!isRecord(x) || !isOptionalString(x.lastWorkout) || !Array.isArray(x.workouts) || !x.workouts.every(isWorkout)) {
-    return false;
-  }
-  const ids = x.workouts.map((w) => w.id);
-  return new Set(ids).size === ids.length;
+/** A check for a library of workouts that pass `workoutCheck`, with no id used twice. */
+function libraryCheck<A extends ActivityBase>(isWorkoutOf: (x: unknown) => x is Workout<A>) {
+  return (x: unknown): x is WorkoutLibrary<A> => {
+    if (!isRecord(x) || !isOptionalString(x.lastWorkout) || !Array.isArray(x.workouts) || !x.workouts.every(isWorkoutOf)) {
+      return false;
+    }
+    const ids = x.workouts.map((w) => w.id);
+    return new Set(ids).size === ids.length;
+  };
 }
+
+export const isWorkout = workoutCheck(isActivity);
+export const isWorkoutLibrary = libraryCheck(isWorkout);
+export const isTimedWorkoutLibrary = libraryCheck(workoutCheck(isTimedActivity));
 
 function isRoutineStep(x: unknown): boolean {
   return (

@@ -2,7 +2,17 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import type { Plugin } from "vite";
-import { isCalibrationLog, isSetLog, isSetRecording, isStoreFile, isWorkoutLibrary, type StoreFile, type WorkoutLibrary } from "./src/store-schema";
+import {
+  type ActivityBase,
+  isCalibrationLog,
+  isSetLog,
+  isSetRecording,
+  isStoreFile,
+  isTimedWorkoutLibrary,
+  isWorkoutLibrary,
+  type StoreFile,
+  type WorkoutLibrary,
+} from "./src/store-schema";
 
 const MAX_BODY_BYTES = 20 * 1024 * 1024;
 
@@ -23,83 +33,115 @@ export const ROUTINE_STORE: StoreLocation = {
   dataDir: "data-routine",
   fixturesDir: "data-routine/fixtures",
 };
+/** The simple page has no mic, so its store keeps only its timed workouts. */
+export const SIMPLE_STORE: Pick<StoreLocation, "prefix" | "dataDir"> = { prefix: "/api/simple", dataDir: "data-simple" };
 
-/** Serves the calibration, fixtures, logs and workout routes of each store from files in the project. */
+type Handler = (req: IncomingMessage, res: ServerResponse, next: () => void) => Promise<void>;
+/** Serves one request, given as "METHOD /path" below the store's prefix. Returns false for a route it doesn't serve. */
+type Routes = (route: string, req: IncomingMessage, res: ServerResponse) => Promise<boolean>;
+
+/** Serves each store's routes from files in the project. */
 export function storePlugin(): Plugin {
   return {
     name: "rep-counter-store",
     configureServer(server) {
       server.middlewares.use(createStoreHandler(server.config.root));
       server.middlewares.use(createStoreHandler(server.config.root, ROUTINE_STORE));
+      server.middlewares.use(createSimpleStoreHandler(server.config.root));
     },
   };
 }
 
-export function createStoreHandler(root: string, location: StoreLocation = MAIN_STORE) {
+/** Serves a mic page's calibration, fixtures, logs and workouts. */
+export function createStoreHandler(root: string, location: StoreLocation = MAIN_STORE): Handler {
   const { prefix, dataDir, fixturesDir } = location;
   const calibrationFile = path.join(root, dataDir, "calibration.json");
-  const workoutsFile = path.join(root, dataDir, "workouts.json");
   const logsDir = path.join(root, dataDir, "logs");
+  const workouts = workoutRoutes(root, dataDir, isWorkoutLibrary);
 
-  return async (req: IncomingMessage, res: ServerResponse, next: () => void): Promise<void> => {
-    const url = req.url?.split("?")[0] ?? "";
-    if (!url.startsWith(`${prefix}/`)) return next();
-    const route = `${req.method} ${url.slice(prefix.length)}`;
+  return serve(prefix, async (route, req, res) => {
     // The id becomes a file name, so it may only hold letters, digits and dashes.
     const logRoute = /^PUT \/logs\/(sets|calibrations)\/([0-9A-Za-z-]{1,64})$/.exec(route);
     const audioRoute = /^PUT \/logs\/(sets|calibrations)\/([0-9A-Za-z-]{1,64})\.webm$/.exec(route);
-    try {
-      if (route === "GET /calibration") {
-        send(res, 200, await readStore(calibrationFile, `${dataDir}/calibration.json`));
-      } else if (route === "GET /workouts") {
-        send(res, 200, await readWorkouts(workoutsFile, `${dataDir}/workouts.json`));
-      } else if (route === "PUT /workouts") {
-        const body = await readJson(req);
-        if (!isWorkoutLibrary(body)) throw new BadRequest("The workouts are not in the expected format.");
-        await writeAtomic(workoutsFile, `${JSON.stringify(body, null, 2)}\n`);
-        send(res, 200, { ok: true });
-      } else if (route === "PUT /calibration") {
-        const body = await readJson(req);
-        if (!isStoreFile(body)) throw new BadRequest("The calibration data is not in the expected format.");
-        await writeAtomic(calibrationFile, `${JSON.stringify(body, null, 2)}\n`);
-        send(res, 200, { ok: true });
-      } else if (route === "POST /fixtures") {
-        const body = await readJson(req);
-        if (!isSetRecording(body)) throw new BadRequest("The set recording is not in the expected format.");
-        const name = `set-${body.recordedAt.replace(/[^0-9A-Za-z]/g, "-")}.json`;
-        await writeAtomic(path.join(root, fixturesDir, name), `${JSON.stringify(body)}\n`);
-        send(res, 200, { path: `${fixturesDir}/${name}` });
-      } else if (logRoute) {
-        const [, kind, id] = logRoute;
-        const body = await readJson(req);
-        const valid = kind === "sets" ? isSetLog(body) : isCalibrationLog(body);
-        if (!valid || (body as { id: string }).id !== id) throw new BadRequest("The log is not in the expected format.");
-        await writeAtomic(path.join(logsDir, kind, `${id}.json`), `${JSON.stringify(body)}\n`);
-        send(res, 200, { path: `${dataDir}/logs/${kind}/${id}.json` });
-      } else if (audioRoute) {
-        const [, kind, id] = audioRoute;
-        if (!req.headers["content-type"]?.startsWith("audio/webm")) {
-          throw new BadRequest("Expected a WebM audio request body.");
-        }
-        const body = await readBody(req);
-        if (body.length === 0) throw new BadRequest("The audio is empty.");
-        await writeAtomic(path.join(logsDir, kind, `${id}.webm`), body);
-        send(res, 200, { path: `${dataDir}/logs/${kind}/${id}.webm` });
-      } else {
-        next();
+    if (await workouts(route, req, res)) return true;
+    if (route === "GET /calibration") {
+      send(res, 200, await readStore(calibrationFile, `${dataDir}/calibration.json`));
+    } else if (route === "PUT /calibration") {
+      const body = await readJson(req);
+      if (!isStoreFile(body)) throw new BadRequest("The calibration data is not in the expected format.");
+      await writeAtomic(calibrationFile, `${JSON.stringify(body, null, 2)}\n`);
+      send(res, 200, { ok: true });
+    } else if (route === "POST /fixtures") {
+      const body = await readJson(req);
+      if (!isSetRecording(body)) throw new BadRequest("The set recording is not in the expected format.");
+      const name = `set-${body.recordedAt.replace(/[^0-9A-Za-z]/g, "-")}.json`;
+      await writeAtomic(path.join(root, fixturesDir, name), `${JSON.stringify(body)}\n`);
+      send(res, 200, { path: `${fixturesDir}/${name}` });
+    } else if (logRoute) {
+      const [, kind, id] = logRoute;
+      const body = await readJson(req);
+      const valid = kind === "sets" ? isSetLog(body) : isCalibrationLog(body);
+      if (!valid || (body as { id: string }).id !== id) throw new BadRequest("The log is not in the expected format.");
+      await writeAtomic(path.join(logsDir, kind, `${id}.json`), `${JSON.stringify(body)}\n`);
+      send(res, 200, { path: `${dataDir}/logs/${kind}/${id}.json` });
+    } else if (audioRoute) {
+      const [, kind, id] = audioRoute;
+      if (!req.headers["content-type"]?.startsWith("audio/webm")) {
+        throw new BadRequest("Expected a WebM audio request body.");
       }
+      const body = await readBody(req);
+      if (body.length === 0) throw new BadRequest("The audio is empty.");
+      await writeAtomic(path.join(logsDir, kind, `${id}.webm`), body);
+      send(res, 200, { path: `${dataDir}/logs/${kind}/${id}.webm` });
+    } else {
+      return false;
+    }
+    return true;
+  });
+}
+
+/** Serves the simple page's timed workouts, and nothing else. */
+export function createSimpleStoreHandler(
+  root: string,
+  location: Pick<StoreLocation, "prefix" | "dataDir"> = SIMPLE_STORE,
+): Handler {
+  return serve(location.prefix, workoutRoutes(root, location.dataDir, isTimedWorkoutLibrary));
+}
+
+/** Hands each request under `prefix` to `routes`, passing on any it doesn't serve and sending back any error. */
+function serve(prefix: string, routes: Routes): Handler {
+  return async (req, res, next) => {
+    const url = req.url?.split("?")[0] ?? "";
+    if (!url.startsWith(`${prefix}/`)) return next();
+    try {
+      if (!(await routes(`${req.method} ${url.slice(prefix.length)}`, req, res))) next();
     } catch (err) {
       send(res, err instanceof BadRequest ? 400 : 500, { error: err instanceof Error ? err.message : String(err) });
     }
   };
 }
 
-function readStore(file: string, name: string): Promise<StoreFile> {
-  return readJsonFile(file, name, { mics: {} }, isStoreFile);
+/** GET and PUT /workouts, kept in <dataDir>/workouts.json and checked with `valid`. */
+function workoutRoutes(root: string, dataDir: string, valid: (x: unknown) => x is WorkoutLibrary<ActivityBase>): Routes {
+  const file = path.join(root, dataDir, "workouts.json");
+  const name = `${dataDir}/workouts.json`;
+  return async (route, req, res) => {
+    if (route === "GET /workouts") {
+      send(res, 200, await readJsonFile(file, name, { workouts: [] }, valid));
+    } else if (route === "PUT /workouts") {
+      const body = await readJson(req);
+      if (!valid(body)) throw new BadRequest("The workouts are not in the expected format.");
+      await writeAtomic(file, `${JSON.stringify(body, null, 2)}\n`);
+      send(res, 200, { ok: true });
+    } else {
+      return false;
+    }
+    return true;
+  };
 }
 
-function readWorkouts(file: string, name: string): Promise<WorkoutLibrary> {
-  return readJsonFile(file, name, { workouts: [] }, isWorkoutLibrary);
+function readStore(file: string, name: string): Promise<StoreFile> {
+  return readJsonFile(file, name, { mics: {} }, isStoreFile);
 }
 
 /** Reads a JSON file, or returns `empty` when there is none yet. `name` is how errors refer to it. */
