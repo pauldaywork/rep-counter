@@ -109,7 +109,8 @@ input:disabled {
   text-align: center;
 }
 
-#count {
+#count,
+#time-left {
   margin: 0;
   font-size: clamp(64px, 18vw, 160px);
   font-weight: 700;
@@ -262,6 +263,7 @@ input:disabled {
 }
 
 #activity-reps,
+#activity-seconds,
 #activity-sets,
 #rest {
   width: 6em;

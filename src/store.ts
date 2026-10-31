@@ -1,5 +1,5 @@
 import type { CalibrationLog, LogKind, SetLog } from "./logs";
-import type { SetRecording, StoreFile, WorkoutLibrary } from "./store-schema";
+import type { SetRecording, StoreFile, TimedWorkoutLibrary, WorkoutLibrary } from "./store-schema";
 
 /** The save server's routes for one data folder: /api for data/, /api/routine for data-routine/. */
 export interface Store {
@@ -39,6 +39,24 @@ export function createStore(base = "/api"): Store {
     async loadWorkouts() {
       const res = await request(`${base}/workouts`);
       return (await res.json()) as WorkoutLibrary;
+    },
+    async saveWorkouts(library) {
+      await request(`${base}/workouts`, { method: "PUT", body: JSON.stringify(library) });
+    },
+  };
+}
+
+/** The simple page's routes: only its timed workouts, in data-simple/. */
+export interface SimpleStore {
+  loadWorkouts(): Promise<TimedWorkoutLibrary>;
+  saveWorkouts(library: TimedWorkoutLibrary): Promise<void>;
+}
+
+export function createSimpleStore(base = "/api/simple"): SimpleStore {
+  return {
+    async loadWorkouts() {
+      const res = await request(`${base}/workouts`);
+      return (await res.json()) as TimedWorkoutLibrary;
     },
     async saveWorkouts(library) {
       await request(`${base}/workouts`, { method: "PUT", body: JSON.stringify(library) });
