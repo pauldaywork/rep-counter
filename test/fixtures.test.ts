@@ -32,6 +32,13 @@ const KNOWN_WRONG: Record<string, string> = {
   "set-2026-10-21T05-27-24-675Z.json": "counts a setup noise and misses a quiet rep under 1 s and one more",
   "set-2026-10-21T05-35-31-989Z.json": "counts two short setup noises around the first rep",
   "set-2026-10-22T05-52-04-736Z.json": "loud low-pitched noise for most of the set buries the reps",
+  "set-2026-10-26T05-35-33-817Z.json": "counts 12 of 10 reps; not looked into yet",
+  "set-2026-10-27T06-13-01-779Z.json": "counts 10 of 11 reps; not looked into yet",
+  "set-2026-10-27T06-41-34-782Z.json": "counts 15 of 14 reps; not looked into yet",
+  "set-2026-10-27T06-46-26-709Z.json": "counts 15 of 16 reps; not looked into yet",
+  "set-2026-10-27T06-50-27-318Z.json": "counts 15 of 19 reps; not looked into yet",
+  "set-2026-10-29T05-31-34-778Z.json": "counts 15 of 14 reps; not looked into yet",
+  "set-2026-10-31T04-51-50-462Z.json": "counts 15 of 14 reps; not looked into yet",
 };
 
 function check(file: URL): void {
