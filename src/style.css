@@ -145,9 +145,20 @@ input:disabled {
   align-items: center;
 }
 
-.page-link {
+.page-links {
   margin-left: auto;
+  display: flex;
+  gap: 12px;
+}
+
+.page-links a {
   color: var(--accent);
+}
+
+.page-links a[aria-current="page"] {
+  color: var(--fg);
+  font-weight: 600;
+  text-decoration: none;
 }
 
 .row {
